@@ -1,10 +1,18 @@
 import Phaser from 'phaser';
 import { InfoPanel } from '../ui/InfoPanel.js';
-import { Unit } from '../entities/Unit.js';
 import { WorldBlackboard } from '../services/worldBlackboard.js';
 import { SupportEnemyAI } from '../services/supportEnemyAI.js';
 import { TilemapService } from '../services/tilemapService.js';
+import { PathfindingService } from '../services/pathfindingService.js';
+import { UnitManager } from '../managers/UnitManager.js';
+import { CombatManager } from '../managers/CombatManager.js';
+import { MovementManager } from '../managers/MovementManager.js';
+import { TargetSelectionManager } from '../managers/TargetSelectionManager.js';
+import { TurnManager } from '../managers/TurnManager.js';
+import { UIManager } from '../managers/UIManager.js';
 import tileset from '../assets/tileset.png';
+import { FogOfWar } from '../vfx/FogOfWar.js';
+import { CombatVFX } from '../vfx/CombatVFX.js';
 
 export class MainScene extends Phaser.Scene {
     constructor() {
@@ -13,50 +21,63 @@ export class MainScene extends Phaser.Scene {
 
     create() {
         this.cameras.main.setBackgroundColor('#0f172a');
+        this.phase = 'player';
+        this.selectedUnit = null;
+        this.actionMode = null;
+        this.highlightedTiles = [];
+        this.highlightedTargets = [];
 
         this.createMap();
         this.createTextures();
-        this.createUnits();
-        this.createBlackboard();
-        this.createAI(this.blackboard);
+
+        this.unitManager = new UnitManager(this);
+        this.combatManager = new CombatManager(this, this.unitManager);
+        this.combatVFX = new CombatVFX(this);
+        this.movementManager = new MovementManager(this);
+        this.targetManager = new TargetSelectionManager(this);
+        this.turnManager = new TurnManager(this);
+        this.uiManager = new UIManager(this);
+
+        this.unitManager.createUnits(this.tilemap);
+
+        this.blackboard = new WorldBlackboard(this);
+        this.supportAI = new SupportEnemyAI(blackboard);
+        
         this.createUI();
+
+
+        this.fogOfWar = new FogOfWar(this, this.tilemap, { visionRange: 7 });
+        this.fogOfWar.render();
+
+
+        const playerUnits = this.unitManager.allUnits.filter(u => u.type === 'player');
+        this.fogOfWar.update(playerUnits, this.unitManager.allUnits, this.selectedUnit);
+        
+
+        this.unitManager.playerUnits.forEach(u => u.resetActions());
+        this.uiManager.updateHelpText();
     }
 
     preload() {
-    this.load.spritesheet(
-        'tiles',
-        tileset,
-        {
-            frameWidth: 40,
-            frameHeight: 40
-        }
-    );
-}
+        this.load.spritesheet('tiles', tileset, { frameWidth: 40, frameHeight: 40 });
+    }
 
     createMap() {
         this.tilemap = new TilemapService(this, {
-            tileSize: 40,
-            cols: 32,
-            rows: 18,
-            offsetX: 0,
-            offsetY: 0,
+            tileSize: 40, cols: 32, rows: 18, offsetX: 0, offsetY: 0,
         });
-
         this.tilemap.generate().render();
+        this.pathfinder = new PathfindingService(this.tilemap.getTileMap(), this.tilemap.COLS, this.tilemap.ROWS);
     }
 
     createTextures() {
         const g = this.add.graphics();
-
-        g.fillStyle(0x22d3ee);
-        g.fillCircle(20, 20, 20);
+        g.fillStyle(0x22d3ee); g.fillCircle(20, 20, 20);
         g.generateTexture('player_unit', 40, 40);
-
-        g.clear();
-        g.fillStyle(0xef4444);
-        g.fillCircle(20, 20, 20);
+        g.clear(); g.fillStyle(0xef4444); g.fillCircle(20, 20, 20);
         g.generateTexture('enemy_unit', 40, 40);
 
+        // Маг
         g.clear();
         g.fillStyle(0x22c55e);
         g.fillCircle(20, 20, 20);
@@ -65,85 +86,44 @@ export class MainScene extends Phaser.Scene {
         g.destroy();
     }
 
-    createUnits() {
-        this.allUnits = [];
-        this.selectedUnit = null;
-
-        const toXY = (tile) => this.tilemap.gridToWorld(tile.gridX, tile.gridY);
-
-        const playerTiles = this.tilemap.getSpawnTiles('left', 3);
-        const enemyTiles  = this.tilemap.getSpawnTiles('right', 4);
-
-        const playerDefs = [
-            { name: 'Медик', hp: 90, ap: 2, attack: 12, defense: 6, accuracy: 75, role: 'medic' },
-            { name: 'Штурмовик', hp: 110, ap: 2, attack: 18, defense: 5, accuracy: 70, role: 'assault' },
-            { name: 'Снайпер', hp: 80, ap: 2, attack: 22, defense: 4, accuracy: 85, role: 'sniper' },
-        ];
-
-        const enemyDefs = [
-            { name: 'Мелкий', hp: 55, ap: 2, attack: 10, defense: 3, accuracy: 60, role: 'swarm' },
-            { name: 'Вражеский снайпер', hp: 70, ap: 2, attack: 16, defense: 4, accuracy: 85, role: 'sniper' },
-            { name: 'Толстяк', hp: 130, ap: 1, attack: 22, defense: 8, accuracy: 60, role: 'brute' },
-            { name: 'Маг', hp: 80, ap: 2, attack: 8, defense: 4, accuracy: 70, role: 'support', textureKey: 'enemy_support_unit',},
-        ];
-
-        playerDefs.forEach((def, i) => {
-            const tile = playerTiles[i];
-            if (!tile) 
-                return;
-
-            const { x, y } = toXY(tile);
-            
-            const unit = new Unit(this, x, y, { ...def, type: 'player' });
-            this.allUnits.push(unit);
-            unit.setTile(tile);
-        });
-
-        enemyDefs.forEach((def, i) => {
-            const tile = enemyTiles[i];
-            if (!tile) 
-                return;
-
-            const { x, y } = toXY(tile);
-
-            const unit = new Unit(this, x, y, { ...def, type: 'enemy' });
-            this.allUnits.push(unit);
-            unit.setTile(tile);
-        });
-    }
-
-    createBlackboard() {
-        this.blackboard = new WorldBlackboard(this);
-    }
-
-    createAI(blackboard) {
-        this.supportAI = new SupportEnemyAI(blackboard);
-    }
-
-    // Применение способности мага
-    runEnemySupportTurn(enemyUnit) {
-        if (!this.supportAI)
-            return;
-
-        this.supportAI.applyBestBuff(enemyUnit);
-    }
-
     createUI() {
         this.infoPanel = new InfoPanel(this);
-
-        this.helpText = this.add.text(640, 30, 'Нажми на юнита', {
-            fontSize: '16px',
-            fontFamily: 'Segoe UI',
-            color: '#64748b'
-        }).setOrigin(0.5).setDepth(10);
+        this.uiManager.createHelpText();
     }
 
-    selectUnit(unit) {
-        if (this.selectedUnit) 
-            this.selectedUnit.deselect();
 
+    selectUnit(unit) {
+        if (this.phase !== 'player') return;
+        if (this.actionMode) return;
+
+        if (this.selectedUnit) {
+            this.selectedUnit.deselect();
+            this.movementManager.clearHighlights();
+        }
         this.selectedUnit = unit;
         unit.select();
         this.infoPanel.update(unit);
+        this.updateMovementDisplay(unit);
+    }
+
+    updateMovementDisplay(unit) {
+        if (unit.type === 'player' && unit.hasActions()) {
+            this.movementManager.showMoveRange(unit);
+        } else {
+            this.movementManager.clearHighlights();
+        }
+        this.uiManager.updateHelpText();
+    }
+
+    startAction(action) {
+        this.targetManager.startAction(action);
+    }
+
+    skipUnitTurn() {
+        this.turnManager.skipUnitTurn();
+    }
+
+    clearSelection() {
+        this.turnManager.clearSelection();
     }
 }
