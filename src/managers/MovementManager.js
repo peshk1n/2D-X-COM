@@ -29,27 +29,13 @@ export class MovementManager {
         const path = pathfinder.findPath(unit.tile, targetTile, unit.moveRange);
         if (!path || path.length === 0) return;
 
-        unit.tile.unit = null;
-        unit.tile = targetTile;
-        targetTile.unit = unit;
-        const { x, y } = tilemap.gridToWorld(targetTile.gridX, targetTile.gridY);
-        unit.sprite.setPosition(x, y);
-        unit.marker.setPosition(x, y - 30);
-        unit.nameLabel.setPosition(x, y - 45);
-
-        unit.useAction(1);
-        this.scene.infoPanel.update(unit);
+        unit.moveTo(targetTile);
 
         if (this.scene.fogOfWar) {
 
-            const playerUnits =
-                this.scene.unitManager.allUnits.filter(
-                    u => u.type === 'player'
-                );
-
             this.scene.fogOfWar.update(
-                playerUnits,
-                this.scene.unitManager.allUnits
+                this.scene.unitManager.getPlayerUnits(),
+                this.scene.unitManager.getUnits()
             );
         }
 

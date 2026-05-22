@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { InfoPanel } from '../ui/InfoPanel.js';
+import { WorldBlackboard } from '../services/worldBlackboard.js';
+import { SupportEnemyAI } from '../services/supportEnemyAI.js';
 import { TilemapService } from '../services/tilemapService.js';
 import { PathfindingService } from '../services/pathfindingService.js';
 import { UnitManager } from '../managers/UnitManager.js';
@@ -28,33 +30,29 @@ export class MainScene extends Phaser.Scene {
         this.createMap();
         this.createTextures();
 
-
+        this.blackboard = new WorldBlackboard(this);
         this.unitManager = new UnitManager(this);
         this.combatManager = new CombatManager(this, this.unitManager);
         this.combatVFX = new CombatVFX(this);
         this.movementManager = new MovementManager(this);
         this.targetManager = new TargetSelectionManager(this);
-        this.turnManager = new TurnManager(this);
+        this.turnManager = new TurnManager(this, this.blackboard);
         this.uiManager = new UIManager(this);
 
         this.unitManager.createUnits(this.tilemap);
-        this.createUI();
 
+        this.supportAI = new SupportEnemyAI(this.unitManager, this.blackboard);
+        
+        this.createUI();
 
         this.fogOfWar = new FogOfWar(this, this.tilemap, { visionRange: 7 });
         this.fogOfWar.render();
 
-
-        const playerUnits = this.unitManager.allUnits.filter(u => u.type === 'player');
-        this.fogOfWar.update(playerUnits, this.unitManager.allUnits, this.selectedUnit);
-        
+        this.fogOfWar.update(this.unitManager.playerUnits, this.unitManager.allUnits, this.selectedUnit);
 
         this.unitManager.playerUnits.forEach(u => u.resetActions());
         this.uiManager.updateHelpText();
     }
-
-
-
 
     preload() {
         this.load.spritesheet('tiles', tileset, { frameWidth: 40, frameHeight: 40 });
@@ -74,6 +72,13 @@ export class MainScene extends Phaser.Scene {
         g.generateTexture('player_unit', 40, 40);
         g.clear(); g.fillStyle(0xef4444); g.fillCircle(20, 20, 20);
         g.generateTexture('enemy_unit', 40, 40);
+
+        // Маг
+        g.clear();
+        g.fillStyle(0xf593af);
+        g.fillCircle(20, 20, 20);
+        g.generateTexture('enemy_support_unit', 40, 40);
+
         g.destroy();
     }
 

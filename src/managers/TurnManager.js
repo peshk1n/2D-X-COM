@@ -1,6 +1,7 @@
 export class TurnManager {
-    constructor(scene) {
+    constructor(scene, blackboard) {
         this.scene = scene;
+        this.blackboard = blackboard;
     }
 
     endUnitTurn(unit) {
@@ -34,7 +35,7 @@ export class TurnManager {
     }
 
     checkEndPlayerPhase() {
-        const playerUnits = this.scene.unitManager.playerUnits;
+        const playerUnits = this.scene.unitManager.getPlayerUnits();
         if (!playerUnits.some(u => u.hasActions())) {
             this.startEnemyPhase();
         }
@@ -42,86 +43,151 @@ export class TurnManager {
 
     startPlayerPhase() {
         this.scene.phase = 'player';
-        this.scene.unitManager.playerUnits.forEach(u => u.resetActions());
+        this.scene.unitManager.getPlayerUnits().forEach(u => u.resetActions());
         this.scene.uiManager.updateHelpText();
     }
 
     startEnemyPhase() {
         this.scene.phase = 'enemy';
         this.scene.uiManager.updateHelpText();
-        this.scene.unitManager.enemyUnits.forEach(e => e.resetActions());
+        this.scene.unitManager.getEnemyUnits().forEach(e => e.resetActions());
         this.scene.time.delayedCall(500, () => this.processEnemyTurn());
     }
 
     processEnemyTurn() {
-        const enemies = this.scene.unitManager.enemyUnits;
-        const active = enemies.filter(e => e.hasActions() && e.hp > 0);
+        const enemies = this.scene.unitManager.getEnemyUnits();
+        const active = enemies.filter(e => e.hasActions());
         if (active.length === 0) {
+            this.tickEnemyBuffs();
             this.startPlayerPhase();
             return;
         }
-        this.enemyAct(active[0]);
+        const supportEnemies = active.filter(e => e.role === 'support');
+        // Первым вызываем мага для раздачи баффов
+        if (supportEnemies.length > 0) {
+            this.enemyAct(supportEnemies[0]);
+        }
+        else {
+            this.enemyAct(active[0]);
+        }
     }
 
     enemyAct(enemy) {
-        const players = this.scene.unitManager.playerUnits;
-        let closest = null, minDist = Infinity;
-        players.forEach(p => {
-            if (p.hp <= 0) return;
-            const d = this.gridDistance(enemy.tile, p.tile);
-            if (d < minDist) { minDist = d; closest = p; }
-        });
-        if (!closest) { enemy.endTurn(); this.processEnemyTurn(); return; }
+        const closestData = this.blackboard.getClosestPlayer(enemy);
+
+        const closestPlayer = closestData.unit;
+        const distanceToClosestPlayer = closestData.distance;
+
+        // Маг
+        if (this.processSupportTurn(enemy, distanceToClosestPlayer, closestPlayer))
+            return;
+
+        if (!closestPlayer) { this.skipEnemyTurn(enemy); return; }
 
         const combat = this.scene.combatManager;
-        if (minDist <= 1) {
-            combat.performRangedAttack(enemy, closest);
-            enemy.endTurn();
-            this.scene.time.delayedCall(300, () => this.processEnemyTurn());
+        if (distanceToClosestPlayer <= 1) {
+            combat.performRangedAttack(enemy, closestPlayer);
+            this.endEnemyTurn(enemy);
             return;
         }
-
-        const pathfinder = this.scene.pathfinder;
+        
         const tilemap = this.scene.tilemap;
-        const neighbours = pathfinder.getTilesInRange(closest.tile, 1)
+        const pathfinder = this.scene.pathfinder;
+        const neighbours = pathfinder.getTilesInRange(closestPlayer.tile, 1)
             .filter(t => t.walkable && !t.unit);
         if (neighbours.length === 0) {
-            enemy.endTurn();
-            this.processEnemyTurn();
+            this.skipEnemyTurn(enemy);
             return;
         }
 
-        let bestTile = neighbours[0];
-        let bestDist = this.gridDistance(enemy.tile, bestTile);
-        for (const tile of neighbours) {
-            const d = this.gridDistance(enemy.tile, tile);
-            if (d < bestDist) {
-                bestDist = d;
-                bestTile = tile;
-            }
-        }
+        const bestTile = this.blackboard.getClosestTile(neighbours, enemy.tile).tile;
 
         const path = pathfinder.findPath(enemy.tile, bestTile, enemy.moveRange);
         if (path && path.length > 0) {
             const finalTile = path[path.length - 1];
-            enemy.tile.unit = null;
-            enemy.tile = finalTile;
-            finalTile.unit = enemy;
-            const { x, y } = tilemap.gridToWorld(finalTile.gridX, finalTile.gridY);
-            enemy.sprite.setPosition(x, y);
-            enemy.useAction(1);
+            
+            enemy.moveTo(finalTile);
 
-            if (enemy.hasActions() && this.gridDistance(enemy.tile, closest.tile) <= 1) {
-                combat.performRangedAttack(enemy, closest);
-                enemy.endTurn();
+            if (enemy.hasActions() && this.blackboard.distanceBetweenTiles(enemy.tile, closestPlayer.tile) <= 1) {
+                combat.performRangedAttack(enemy, closestPlayer);
             }
-        } else {
-            enemy.endTurn();
         }
-        this.scene.time.delayedCall(300, () => this.processEnemyTurn());
+        else {
+            this.skipEnemyTurn(enemy);
+            return;
+        }
+        this.endEnemyTurn(enemy);
     }
 
-    gridDistance(a, b) {
-        return Math.abs(a.gridX - b.gridX) + Math.abs(a.gridY - b.gridY);
+    tickEnemyBuffs() {
+        this.scene.unitManager.getEnemyUnits().forEach(e => e.tickBuffs());
+    }
+
+    skipEnemyTurn(enemy) {
+        enemy.endTurn();
+        this.startNextEnemyTurn(0);
+    }
+
+    endEnemyTurn(enemy) {
+        // Повторный ход
+        if (enemy.consumeExtraTurn()) {
+            this.startNextEnemyTurn(500);
+            return;
+        }
+            
+        enemy.endTurn();
+        this.startNextEnemyTurn();
+    }
+
+    startNextEnemyTurn(delay = 300) {
+        if (delay === 0) {
+            this.processEnemyTurn();
+            return;
+        }
+        this.scene.time.delayedCall(delay, () => this.processEnemyTurn());
+    }
+
+    // Поведение мага
+    processSupportTurn(enemy, distanceToClosestPlayer, closestPlayer) {
+        if (enemy.role === 'support') {
+            
+            // Если игрок слишком близко
+            if (distanceToClosestPlayer <= 3) {
+                const tilesToGo = this.scene.pathfinder.getTilesInRange(enemy.tile, enemy.moveRange);
+
+                // Некуда убегать
+                if (tilesToGo.length === 0) {
+                    this.scene.supportAI.applyBestBuff(enemy);
+                    this.endEnemyTurn(enemy);
+                    return true;
+                }
+
+                const mostDistantFromPlayers = this.blackboard.getTheMostDistantTileFromPlayers(tilesToGo, enemy.tile, 7);
+
+                const newClosestPlayerInfo = this.blackboard.getClosestTile(this.scene.unitManager.getPlayerUnits().map(p => p.tile), mostDistantFromPlayers);
+
+                // Нет смысла убегать
+                if (newClosestPlayerInfo.distance <= distanceToClosestPlayer) {
+                    this.scene.supportAI.applyBestBuff(enemy);
+                    this.endEnemyTurn(enemy);
+                    return true;
+                }
+
+                enemy.moveTo(mostDistantFromPlayers);
+            }
+            // Если заметил игрока (пока захардкожено)
+            else if (distanceToClosestPlayer <= 7) {
+                this.scene.supportAI.applyBestBuff(enemy);
+            }
+            else {
+                this.skipEnemyTurn(enemy);
+                return true;
+            }
+
+            this.endEnemyTurn(enemy);
+            return true;
+        }
+
+        return false;
     }
 }
