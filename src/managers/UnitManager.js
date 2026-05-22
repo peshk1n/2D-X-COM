@@ -16,15 +16,16 @@ export class UnitManager {
         const playerDefs = [
             { name: 'Медик', hp: 100, attack: 10, defense: 8, accuracy: 70, role: 'medic', moveRange: 3 },
             { name: 'Снайпер', hp: 80, attack: 15, defense: 5, accuracy: 85, role: 'sniper', moveRange: 3 },
-            { name: 'Штурмовик', hp: 120, attack: 18, defense: 10, accuracy: 65, role: 'assault', moveRange: 3 },
+            { name: 'Штурмовик', hp: 120, attack: 18, defense: 10, accuracy: 65, role: 'assault', moveRange: 2 },
         ];
         const enemyDefs = [
-            { name: 'Пришелец-солдат', hp: 70, attack: 12, defense: 4, accuracy: 60, role: null, moveRange: 3 },
-            { name: 'Пришелец-элита', hp: 100, attack: 16, defense: 6, accuracy: 70, role: null, moveRange: 3 },
-            { name: 'Aling', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
-            { name: 'Aling', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
-            { name: 'Aling', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
-            { name: 'Aling', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
+            { name: 'Алинг', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
+            { name: 'Алинг', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
+            { name: 'Алинг', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
+            { name: 'Алинг', hp: 30, attack: 20, defense: 10, accuracy: 60, role: "swarm", moveRange: 4 },
+            { name: 'Вражеский снайпер', hp: 70, ap: 2, attack: 16, defense: 4, accuracy: 85, role: 'sniper', moveRange: 3 },
+            { name: 'Толстяк', hp: 130, ap: 1, attack: 22, defense: 8, accuracy: 60, role: 'brute', moveRange: 2 },
+            { name: 'Маг', hp: 80, ap: 2, attack: 8, defense: 4, accuracy: 70, role: 'support', textureKey: 'enemy_support_unit', moveRange: 3 },
         ];
 
         playerDefs.forEach((def, i) => {
@@ -32,8 +33,7 @@ export class UnitManager {
             if (!tile) return;
             const { x, y } = toXY(tile);
             const unit = new Unit(this.scene, x, y, { ...def, type: 'player' });
-            unit.tile = tile;
-            tile.unit = unit;
+            unit.setTile(tile);
             this.playerUnits.push(unit);
             this.allUnits.push(unit);
         });
@@ -43,17 +43,31 @@ export class UnitManager {
             if (!tile) return;
             const { x, y } = toXY(tile);
             const unit = new Unit(this.scene, x, y, { ...def, type: 'enemy' });
-            unit.tile = tile;
-            tile.unit = unit;
+            unit.setTile(tile);
             this.enemyUnits.push(unit);
             this.allUnits.push(unit);
         });
     }
 
+    getUnits(alive = true) {
+        const units = this.scene.unitManager.allUnits ?? [];
+        return alive ? units.filter(unit => unit.isAlive) : units;
+    }
+
+    getEnemyUnits(alive = true) {
+        const units = this.scene.unitManager.enemyUnits ?? [];
+        return alive ? units.filter(unit => unit.isAlive) : units;
+    }
+
+    getPlayerUnits(alive = true) {
+        const units = this.scene.unitManager.playerUnits ?? [];
+        return alive ? units.filter(unit => unit.isAlive) : units;
+    }
+
     killUnit(unit) {
         unit.hp = 0;
         unit.actionsLeft = 0;
-        if (unit.tile) unit.tile.unit = null;
+        unit.setTile(null);
         unit.sprite.setVisible(false);
         unit.marker.setVisible(false);
         unit.nameLabel.setVisible(false);

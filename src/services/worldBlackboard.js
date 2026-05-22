@@ -94,6 +94,19 @@ export class WorldBlackboard {
         return this.getClosestUnit(this.getEnemyUnits(), unit);
     }
 
+
+    isEnemyUnitVisible(unit) {
+        return this.scene.fogOfWar.isExplored(this.getUnitTile(unit));
+    }
+
+    getClosestPlayer(unit) {
+        return this.getClosestUnit(this.scene.unitManager.getPlayerUnits(), unit);
+    }
+
+    getClosestEnemy(unit) {
+        return this.getClosestUnit(this.scene.unitManager.getEnemyUnits(), unit);
+    }
+
     getClosestTile(tiles, tile) {
         let best = null;
 
@@ -105,6 +118,36 @@ export class WorldBlackboard {
         }
 
         return best;
+    }
+
+    getTheMostDistantTileFromPlayers(tiles, currentTile, checkRange) {
+        return this._getTheMostDistantTileFrom(this.scene.unitManager.getPlayerUnits(), tiles, currentTile, checkRange);
+    }
+
+    getTheMostDistantTileFromEnemies(tiles, currentTile, checkRange) {
+        return this._getTheMostDistantTileFrom(this.scene.unitManager.getEnemyUnits(), tiles, currentTile, checkRange);
+    }
+
+    _getTheMostDistantTileFrom(units, tiles, currentTile, checkRange) {
+        if (!units || !tiles || !currentTile || !checkRange)
+            return null;
+
+        let bestTile = null;
+        let maxDist = -Infinity;
+
+        for (const t of tiles) {
+            const distancesSum = MathUtils.sum(
+                units.filter(unit => this.distanceBetweenTiles(this.getUnitTile(unit), currentTile) <= checkRange)
+                    .map(unit => this.distanceBetweenTiles(this.getUnitTile(unit), t))
+            );
+
+            if (distancesSum > maxDist) {
+                maxDist = distancesSum;
+                bestTile = t;
+            }
+        }
+
+        return bestTile;
     }
 
     getClosestUnit(units, unit) {
@@ -121,7 +164,7 @@ export class WorldBlackboard {
     }
 
     getAlliesInRange(unit, range) {
-        let allies = unit.type === 'player' ? this.getPlayerUnits() : this.getEnemyUnits();
+        let allies = unit.type === 'player' ? this.scene.unitManager.getPlayerUnits() : this.scene.unitManager.getEnemyUnits();
         allies = allies.filter((ally) => ally !== unit);
         return allies.filter((ally) => this.distanceBetweenUnits(unit, ally) <= range);
     }
@@ -131,7 +174,7 @@ export class WorldBlackboard {
         if (tile?.unit)
             return tile.unit;
 
-        return this.getUnits(false).find((unit) => {
+        return this.scene.unitManager.getUnits(false).find((unit) => {
             const pos = this.getUnitGridPosition(unit);
             return pos && pos.x === gx && pos.y === gy;
         }) ?? null;

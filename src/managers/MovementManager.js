@@ -34,8 +34,8 @@ export class MovementManager {
         if (this.scene.fogOfWar) {
 
             this.scene.fogOfWar.update(
-                this.scene.unitManager.playerUnits,
-                this.scene.unitManager.allUnits
+                this.scene.unitManager.getPlayerUnits(),
+                this.scene.unitManager.getUnits()
             );
         }
 

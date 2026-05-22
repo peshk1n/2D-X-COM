@@ -256,7 +256,7 @@ export class AlingAI {
             //React to attack
             for (const ally of swarmUnits) {
 
-                if (!ally.lastAttacker) {
+                if (!ally.lastAttacker || !ally.lastAttacker.hp > 0) {
                     continue;
                 }
 

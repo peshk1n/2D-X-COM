@@ -34,7 +34,6 @@ export class PathfindingService {
         if (start === end) {
             return [];
         }
-
         const visited = new Map();
 
         const queue = [{
@@ -54,7 +53,6 @@ export class PathfindingService {
             }
 
             for (const neighbor of this._getNeighbors(tile)) {
-
                 if (!neighbor.walkable) {
                     continue;
                 }

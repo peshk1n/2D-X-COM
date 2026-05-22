@@ -25,7 +25,7 @@ export class TargetSelectionManager {
             else if (unit.role === 'assault') { maxRange = 1; onlyAdjacent = true; }
         }
 
-        const candidates = targetAllies ? this.scene.unitManager.playerUnits : this.scene.unitManager.enemyUnits;
+        const candidates = targetAllies ? this.scene.unitManager.getPlayerUnits() : this.scene.unitManager.getEnemyUnits();
         const tilemap = this.scene.tilemap;
         candidates.forEach(target => {
             if (target === unit || target.hp <= 0) return;
@@ -72,7 +72,7 @@ export class TargetSelectionManager {
     }
 
     setUnitsInteractive(enabled) {
-        this.scene.unitManager.allUnits.forEach(u => {
+        this.scene.unitManager.getUnits(false).forEach(u => {
             if (enabled) u.sprite.setInteractive();
             else u.sprite.disableInteractive();
         });

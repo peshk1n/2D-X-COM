@@ -10,6 +10,10 @@ export class FogOfWar {
         this._createFogTexture();
     }
 
+    isExplored(tile) {
+        return this.exploredTiles.has(`${tile.gridX},${tile.gridY}`);
+    }
+
     _createFogTexture() {
         const { width, height } = this._getTextureSize();
         const canvas = document.createElement('canvas');
