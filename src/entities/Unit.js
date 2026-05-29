@@ -60,6 +60,7 @@ export class Unit {
             this.tile.unit = null;
         }
 
+        this.previousTile = this.tile;
         this.tile = tile;
 
         if (tile) {
@@ -226,34 +227,4 @@ export class Unit {
         this.marker.setVisible(false);
         this.sprite.clearTint();
     }
-
-
-    get isAlive() {
-        return this.hp > 0;
-    }
-
-    moveTo(tile) {
-        this.setTile(tile);
-        const { x, y } = this.scene.tilemap.gridToWorld(tile.gridX, tile.gridY);
-        this.sprite.setPosition(x, y);
-        this.marker.setPosition(x, y - 30);
-        this.nameLabel.setPosition(x, y - 45);
-        this.useAction(1);
-        if (this.scene.selectedUnit === this) {
-            this.scene.infoPanel.update(this);
-        }
-    }
-
-    setTile(tile) {
-        if (this.tile && this.tile.unit === this) {
-            this.tile.unit = null;
-        }
-        this.previousTile = this.tile;
-        this.tile = tile;
-
-        if (tile) {
-            tile.unit = this;
-        }
-    }
-
 }

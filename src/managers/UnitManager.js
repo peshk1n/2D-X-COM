@@ -50,17 +50,17 @@ export class UnitManager {
     }
 
     getUnits(alive = true) {
-        const units = this.scene.unitManager.allUnits ?? [];
+        const units = this.allUnits ?? [];
         return alive ? units.filter(unit => unit.isAlive) : units;
     }
 
     getEnemyUnits(alive = true) {
-        const units = this.scene.unitManager.enemyUnits ?? [];
+        const units = this.enemyUnits ?? [];
         return alive ? units.filter(unit => unit.isAlive) : units;
     }
 
     getPlayerUnits(alive = true) {
-        const units = this.scene.unitManager.playerUnits ?? [];
+        const units = this.playerUnits ?? [];
         return alive ? units.filter(unit => unit.isAlive) : units;
     }
 
