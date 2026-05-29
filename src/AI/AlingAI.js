@@ -15,10 +15,10 @@ export class AlingAI {
         const combat = this.scene.combatManager;
         const blackboard = this.scene.blackboard;
 
-        const swarmUnits = blackboard.getEnemyUnits()
+        const swarmUnits = this.scene.unitManager.getEnemyUnits()
             .filter(u => u.role === 'swarm' && u !== enemy);
 
-        const playerUnits = blackboard.getPlayerUnits();
+        const playerUnits = this.scene.unitManager.getPlayerUnits();
 
         // Generate all possible action plans
 
