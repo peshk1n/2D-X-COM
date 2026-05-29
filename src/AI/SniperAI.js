@@ -9,6 +9,7 @@ export class SniperAI {
 
     process(enemy) {
         const closestData = this.scene.blackboard.getClosestPlayer(enemy);
+        if (!closestData) return;
         const closestPlayer = closestData.unit;
         const distanceToClosestPlayer = closestData.distance;
 

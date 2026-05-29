@@ -9,7 +9,7 @@ export class StupidAI {
 
     process(enemy) {
         const closestData = this.scene.blackboard.getClosestPlayer(enemy);
-
+        if (!closestData) return;
         const closest = closestData.unit;
         const distanceToClosest = closestData.distance;
 

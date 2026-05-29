@@ -29,8 +29,8 @@ export class MainScene extends Phaser.Scene {
     }
 
     init() {
-
         this.isPaused = false;
+        this.gameOver = false;
         this.pauseOverlay = null;
         this.pauseMenuContainer = null;
     }
@@ -241,5 +241,59 @@ export class MainScene extends Phaser.Scene {
 
     clearSelection() {
         this.turnManager.clearSelection();
+    }
+
+    checkWinLose() {
+        if (this.gameOver) return;
+        const aliveEnemies = this.unitManager.getEnemyUnits(true).length;
+        const alivePlayers = this.unitManager.getPlayerUnits(true).length;
+        if (aliveEnemies === 0) {
+            this.gameOver = true;
+            this.showGameResult(true);
+        } else if (alivePlayers === 0) {
+            this.gameOver = true;
+            this.showGameResult(false);
+        }
+    }
+
+    showGameResult(isVictory) {
+        const depth = 2000;
+
+        this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.85)
+            .setDepth(depth)
+            .setInteractive();
+
+        const titleText = isVictory ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ';
+        const titleColor = isVictory ? '#22d3ee' : '#ef4444';
+        const titleStroke = isVictory ? '#0e7490' : '#991b1b';
+
+        this.add.text(640, 270, titleText, {
+            fontSize: '80px',
+            fontFamily: 'Arial Black',
+            color: titleColor,
+            stroke: titleStroke,
+            strokeThickness: 6
+        }).setOrigin(0.5).setDepth(depth + 1);
+
+        const subText = isVictory ? 'Все враги уничтожены' : 'Все союзники погибли';
+        this.add.text(640, 370, subText, {
+            fontSize: '30px',
+            fontFamily: 'Arial',
+            color: '#cccccc'
+        }).setOrigin(0.5).setDepth(depth + 1);
+
+        const menuBtn = this.add.text(640, 460, 'Главное меню', {
+            fontSize: '32px',
+            color: '#ffffff',
+            backgroundColor: '#4a4a6a',
+            padding: { x: 24, y: 12 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(depth + 1);
+
+        menuBtn.on('pointerdown', () => {
+            this.scene.stop('MainScene');
+            this.scene.start('MainMenu');
+        });
+        menuBtn.on('pointerover', () => menuBtn.setStyle({ backgroundColor: '#6a6a8a' }));
+        menuBtn.on('pointerout', () => menuBtn.setStyle({ backgroundColor: '#4a4a6a' }));
     }
 }
