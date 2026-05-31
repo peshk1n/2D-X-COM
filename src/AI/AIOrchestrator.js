@@ -105,6 +105,12 @@ export class AIOrchestrator {
                     );
 
                     break;
+
+                case 'summon':
+
+                    SummonerAI.summon(enemy, action.tile, action.config);
+
+                    break;
             }
 
             if (currentActionIndex >= plan.actions.length) {
