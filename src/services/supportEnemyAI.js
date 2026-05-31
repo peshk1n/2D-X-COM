@@ -31,11 +31,29 @@ export class SupportEnemyAI {
         };
     }
 
-    getRankedCandidates(buffType, supportUnit) {
+    getRankedCandidates(buffType, supportUnit, candidatePlans) {
         const candidates = this.unitManager
             .getEnemyUnits()
             .filter((unit) => unit !== supportUnit)
             .filter((unit) => this._canReceive(buffType, unit));
+
+        const scored = candidates
+            .map((unit) => {
+                const features = this._buildFeatures(unit, supportUnit);
+                return {
+                    unit,
+                    score: this._scoreCandidate(buffType, unit, candidatePlans.get(unit), features),
+                    features,
+                };
+            });
+
+        scored.sort((a, b) => b.score - a.score);
+        return scored;
+    }
+
+    _buildCandidatePlans(units, buffTypes) {
+
+        const candidates = units.filter((unit) => buffTypes.some((buffType) => this._canReceive(buffType, unit)));
 
         const getActionPlan = (unit) => {
             const unitAI = this.aiOrchestrator.getAIForEnemy(unit);
@@ -46,25 +64,22 @@ export class SupportEnemyAI {
             return plan;
         };
 
-        const scored = candidates
-            .map((unit) => {
-                const features = this._buildFeatures(unit, supportUnit);
-                return {
-                    unit,
-                    score: this._scoreCandidate(buffType, unit, getActionPlan(unit), features),
-                    features,
-                };
-            });
+        const candidatePlans = new Map();
 
-        scored.sort((a, b) => b.score - a.score);
-        return scored;
+        for (const candidate of candidates) {
+            candidatePlans.set(candidate, getActionPlan(candidate));
+        }
+
+        return candidatePlans;
     }
 
     chooseBestBuff(supportUnit) {
         const buffTypes = [BUFF_TYPES.SPEED, BUFF_TYPES.ATTACK, BUFF_TYPES.EXTRA_TURN];
 
+        const candidatePlans = this._buildCandidatePlans(this.unitManager.getEnemyUnits().filter((unit) => unit !== supportUnit), buffTypes);
+
         const evaluated = buffTypes.map((buffType) => {
-            const ranked = this.getRankedCandidates(buffType, supportUnit);
+            const ranked = this.getRankedCandidates(buffType, supportUnit, candidatePlans);
             const top = ranked[0];
 
             return {
@@ -79,6 +94,10 @@ export class SupportEnemyAI {
         const best = evaluated[0];
 
         if (!best || !best.target || !Number.isFinite(best.score)) 
+            return null;
+
+        // Если никакой пользы не будет, то ничего не делаем
+        if (best.score <= 0)
             return null;
 
         return best;
