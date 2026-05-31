@@ -16,7 +16,7 @@ export class SupportAI {
         const closest = closestData.unit;
         const distanceToClosest = closestData.distance;
 
-        if (distanceToClosest <= 3) {
+        if (distanceToClosest <= 2) {
             const tilesToGo = this.scene.pathfinder.getTilesInRange(enemy.tile, enemy.moveRange);
 
             // Некуда убегать
