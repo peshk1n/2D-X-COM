@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../managers/AudioManager.js';
+const bgMusic = new URL('../assets/music/background-music.mp3', import.meta.url).href;
 
 export class MainMenu extends Phaser.Scene {
     constructor() {
@@ -7,7 +8,7 @@ export class MainMenu extends Phaser.Scene {
     }
 
     preload() {
-        this.load.audio('bgMusic', 'src/assets/music/background-music.mp3');
+        this.load.audio('bgMusic', bgMusic);
     }
 
     create() {
@@ -32,7 +33,14 @@ export class MainMenu extends Phaser.Scene {
         });
 
         AudioManager.init(this, 'bgMusic', { volume: 0.5 });
-        AudioManager.playMusic();
+
+        this.input.once('pointerdown', () => {
+            AudioManager.playMusic();
+        });
+
+        this.input.keyboard.once('keydown', () => {
+            AudioManager.playMusic();
+        });
 
         this.createButtons();
     }
