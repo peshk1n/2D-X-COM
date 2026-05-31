@@ -9,8 +9,41 @@ export class TargetSelectionManager {
         this.scene.actionMode = action;
         this.scene.movementManager.clearHighlights();
         this.setUnitsInteractive(false);
+        this.showActionRange(unit, action);
         this.showTargetsForAction(action);
         this.scene.uiManager.updateHelpText();
+    }
+
+    showActionRange(unit, action) {
+        this.clearActionRange();
+        if (!unit?.tile) return;
+
+        let maxRange = 5;
+        let color = 0xf97316;
+
+        if (action === 'skill') {
+            if (unit.role === 'medic')        { maxRange = 1;  color = 0x2dd4bf; }
+            else if (unit.role === 'sniper')  { maxRange = 12; color = 0xfbbf24; }
+            else if (unit.role === 'assault') { maxRange = 1;  color = 0xef4444; }
+        }
+
+        const tilemap = this.scene.tilemap;
+        for (let row = 0; row < tilemap.ROWS; row++) {
+            for (let col = 0; col < tilemap.COLS; col++) {
+                const tile = tilemap.getTile(col, row);
+                if (!tile || !tile.walkable) continue;
+                const dist = Math.abs(tile.gridX - unit.tile.gridX) + Math.abs(tile.gridY - unit.tile.gridY);
+                if (dist < 1 || dist > maxRange) continue;
+                const { x, y } = tilemap.gridToWorld(tile.gridX, tile.gridY);
+                const rect = this.scene.add.rectangle(x, y, 36, 36, color, 0.22).setDepth(1);
+                this.scene.rangeHighlights.push(rect);
+            }
+        }
+    }
+
+    clearActionRange() {
+        (this.scene.rangeHighlights ?? []).forEach(r => r.destroy());
+        this.scene.rangeHighlights = [];
     }
 
     showTargetsForAction(action) {

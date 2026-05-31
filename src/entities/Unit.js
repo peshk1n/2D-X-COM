@@ -58,7 +58,9 @@ export class Unit {
         this.marker.setPosition(x, y - 30);
         this.nameLabel.setPosition(x, y - 45);
         this.useAction(1);
-        this.scene.infoPanel.update(this);
+        if (this.scene.selectedUnit === this) {
+            this.scene.infoPanel.update(this);
+        }
     }
 
     setTile(tile) {

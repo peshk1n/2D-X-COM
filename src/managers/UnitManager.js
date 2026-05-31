@@ -76,5 +76,6 @@ export class UnitManager {
         unit.marker.setVisible(false);
         unit.nameLabel.setVisible(false);
         unit.onKilled();
+        this.scene.time.delayedCall(600, () => this.scene.checkWinLose?.());
     }
 }

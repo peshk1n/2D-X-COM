@@ -1,29 +1,28 @@
-// Глобальный экземпляр аудио менеджера
 class AudioManagerClass {
     constructor() {
         this.music = null;
         this.isMuted = false;
+        this.volume = 0.5;
         this.currentScene = null;
         this.isInitialized = false;
     }
 
     init(scene, musicKey, config = {}) {
         this.currentScene = scene;
-        
+        // Загружаем сохранённое состояние до создания музыки, чтобы объект
+        // сразу создавался с правильными volume/mute
+        this.loadSavedState();
+
         if (!this.isInitialized) {
-            // Создаём музыку только один раз
             if (scene.cache.audio.exists(musicKey)) {
                 this.music = scene.sound.add(musicKey, {
-                    volume: config.volume || 0.5,
+                    volume: this.volume,
                     loop: true,
                     mute: this.isMuted
                 });
                 this.isInitialized = true;
             }
         }
-        
-        // Загружаем сохранённое состояние
-        this.loadSavedState();
     }
 
     playMusic() {
@@ -38,6 +37,20 @@ class AudioManagerClass {
         }
     }
 
+    setVolume(volume) {
+        this.volume = Math.max(0, Math.min(1, volume));
+        this.isMuted = this.volume === 0;
+        if (this.music) {
+            this.music.setVolume(this.volume);
+            this.music.setMute(this.isMuted);
+        }
+        if (this.currentScene) {
+            this.currentScene.sound.setMute(this.isMuted);
+        }
+        localStorage.setItem('musicVolume', this.volume);
+        localStorage.setItem('musicMuted', this.isMuted);
+    }
+
     toggleMute() {
         this.isMuted = !this.isMuted;
         if (this.music) {
@@ -50,22 +63,24 @@ class AudioManagerClass {
         return this.isMuted;
     }
 
-    setVolume(volume) {
-        if (this.music) {
-            this.music.setVolume(volume);
-        }
-    }
-
     loadSavedState() {
+        const savedVolume = localStorage.getItem('musicVolume');
         const savedMute = localStorage.getItem('musicMuted');
-        if (savedMute !== null) {
+
+        if (savedVolume !== null) {
+            this.volume = parseFloat(savedVolume);
+            this.isMuted = this.volume === 0;
+        } else if (savedMute !== null) {
             this.isMuted = savedMute === 'true';
-            if (this.music) {
-                this.music.setMute(this.isMuted);
-            }
-            if (this.currentScene) {
-                this.currentScene.sound.setMute(this.isMuted);
-            }
+            if (this.isMuted) this.volume = 0;
+        }
+
+        if (this.music) {
+            this.music.setVolume(this.volume);
+            this.music.setMute(this.isMuted);
+        }
+        if (this.currentScene) {
+            this.currentScene.sound.setMute(this.isMuted);
         }
     }
 }

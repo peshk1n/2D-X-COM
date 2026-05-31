@@ -8,6 +8,7 @@ export class TurnManager {
         unit.deselect();
         this.scene.movementManager.clearHighlights();
         this.scene.targetManager.clearTargetHighlights();
+        this.scene.targetManager.clearActionRange();
         this.scene.infoPanel.hide();
         this.scene.selectedUnit = null;
         this.scene.actionMode = null;
@@ -28,6 +29,7 @@ export class TurnManager {
             this.scene.selectedUnit.deselect();
             this.scene.movementManager.clearHighlights();
             this.scene.targetManager.clearTargetHighlights();
+            this.scene.targetManager.clearActionRange();
             this.scene.targetManager.setUnitsInteractive(true);
             this.scene.infoPanel.hide();
             this.scene.selectedUnit = null;
@@ -44,12 +46,14 @@ export class TurnManager {
     }
 
     startPlayerPhase() {
+        if (this.scene.gameOver) return;
         this.scene.phase = 'player';
         this.scene.unitManager.getPlayerUnits().forEach(u => u.resetActions());
         this.scene.uiManager.updateHelpText();
     }
 
     startEnemyPhase() {
+        if (this.scene.gameOver) return;
         this.scene.phase = 'enemy';
         this.scene.uiManager.updateHelpText();
         this.scene.unitManager.getEnemyUnits().forEach(e => e.resetActions());
@@ -57,6 +61,7 @@ export class TurnManager {
     }
 
     processEnemyTurn() {
+        if (this.scene.gameOver) return;
         const enemies = this.scene.unitManager.getEnemyUnits();
         const active = enemies.filter(e => e.hasActions());
         if (active.length === 0) {

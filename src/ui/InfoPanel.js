@@ -1,8 +1,13 @@
+import Phaser from 'phaser';
+
 export class InfoPanel {
     constructor(scene) {
         this.scene = scene;
         this.container = scene.add.container(0, 0).setDepth(10).setVisible(false);
-
+        this._userPositioned = false;
+        this._dragging = false;
+        this._dragOffsetX = 0;
+        this._dragOffsetY = 0;
 
         this.bg = scene.add.rectangle(0, 0, 300, 240, 0x1e293b)
             .setStrokeStyle(2, 0x334155)
@@ -72,10 +77,41 @@ export class InfoPanel {
         this.closeBtn.on('pointerout', () => this.closeBtn.setColor('#94a3b8'));
         this.closeBtn.on('pointerdown', () => this.scene.clearSelection());
 
+        this.dragHandle = scene.add.rectangle(0, 0, 255, 28, 0x0f172a, 0)
+            .setOrigin(0, 0)
+            .setInteractive({ useHandCursor: true, cursor: 'grab' });
+        this.container.add(this.dragHandle);
+
+        this._initDrag();
         this.hide();
     }
 
+    _initDrag() {
+        this.dragHandle.on('pointerdown', (pointer) => {
+            this._dragging = true;
+            this._dragOffsetX = pointer.x - this.container.x;
+            this._dragOffsetY = pointer.y - this.container.y;
+            this.dragHandle.input.cursor = 'grabbing';
+        });
+
+        this.scene.input.on('pointermove', (pointer) => {
+            if (!this._dragging) return;
+            const x = Phaser.Math.Clamp(pointer.x - this._dragOffsetX, 0, 1280 - 300);
+            const y = Phaser.Math.Clamp(pointer.y - this._dragOffsetY, 0, 720 - 240);
+            this.container.setPosition(x, y);
+            this._userPositioned = true;
+        });
+
+        this.scene.input.on('pointerup', () => {
+            if (this._dragging) {
+                this._dragging = false;
+                this.dragHandle.input.cursor = 'grab';
+            }
+        });
+    }
+
     update(unit) {
+        this._currentUnit = unit;
         this.show();
 
         this.nameText.setText(unit.name);
@@ -134,16 +170,15 @@ export class InfoPanel {
     }
 
     _positionPanel(unit) {
+        if (this._userPositioned) return;
         const sprite = unit.sprite;
         const panelWidth = 300;
         const panelHeight = 240;
         const margin = 20;
 
-
         if (sprite.x < 400 && sprite.y < 400) {
             this.container.setPosition(1280 - panelWidth - margin, 720 - panelHeight - margin);
         } else {
-
             this.container.setPosition(margin, margin);
         }
     }
@@ -153,6 +188,7 @@ export class InfoPanel {
     }
 
     hide() {
+        this.scene.targetManager?.clearActionRange();
         this.container.setVisible(false);
     }
 }
