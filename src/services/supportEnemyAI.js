@@ -13,9 +13,10 @@ const clamp01 = (value) => Math.min(1, Math.max(0, value));
  * Система принятия решений для поддерживающего врага (мага), который может накладывать баффы на союзников.
  */
 export class SupportEnemyAI {
-    constructor(unitManager, blackboard, cfg = {}) {
+    constructor(unitManager, blackboard, aiOrchestrator, cfg = {}) {
         this.unitManager = unitManager;
         this.blackboard = blackboard;
+        this.aiOrchestrator = aiOrchestrator;
         this.cfg = {
             neighborRange: cfg.neighborRange ?? 3,
             maxDistance: cfg.maxDistance ?? null,
@@ -30,18 +31,18 @@ export class SupportEnemyAI {
         };
     }
 
-    getRankedCandidates(buffType, supportUnit) {
+    getRankedCandidates(buffType, supportUnit, candidatePlans) {
         const candidates = this.unitManager
             .getEnemyUnits()
-            .filter((unit) => unit !== supportUnit);
+            .filter((unit) => unit !== supportUnit)
+            .filter((unit) => this._canReceive(buffType, unit));
 
         const scored = candidates
-            .filter((unit) => this._canReceive(buffType, unit))
             .map((unit) => {
                 const features = this._buildFeatures(unit, supportUnit);
                 return {
                     unit,
-                    score: this._scoreCandidate(buffType, unit, features),
+                    score: this._scoreCandidate(buffType, unit, candidatePlans.get(unit), features),
                     features,
                 };
             });
@@ -50,11 +51,35 @@ export class SupportEnemyAI {
         return scored;
     }
 
+    _buildCandidatePlans(units, buffTypes) {
+
+        const candidates = units.filter((unit) => buffTypes.some((buffType) => this._canReceive(buffType, unit)));
+
+        const getActionPlan = (unit) => {
+            const unitAI = this.aiOrchestrator.getAIForEnemy(unit);
+            if (!unitAI) {
+                return null;
+            }
+            const plan = unitAI.getActionsPlan(unit, unit.actionsLeft);
+            return plan;
+        };
+
+        const candidatePlans = new Map();
+
+        for (const candidate of candidates) {
+            candidatePlans.set(candidate, getActionPlan(candidate));
+        }
+
+        return candidatePlans;
+    }
+
     chooseBestBuff(supportUnit) {
         const buffTypes = [BUFF_TYPES.SPEED, BUFF_TYPES.ATTACK, BUFF_TYPES.EXTRA_TURN];
 
+        const candidatePlans = this._buildCandidatePlans(this.unitManager.getEnemyUnits().filter((unit) => unit !== supportUnit), buffTypes);
+
         const evaluated = buffTypes.map((buffType) => {
-            const ranked = this.getRankedCandidates(buffType, supportUnit);
+            const ranked = this.getRankedCandidates(buffType, supportUnit, candidatePlans);
             const top = ranked[0];
 
             return {
@@ -69,6 +94,10 @@ export class SupportEnemyAI {
         const best = evaluated[0];
 
         if (!best || !best.target || !Number.isFinite(best.score)) 
+            return null;
+
+        // Если никакой пользы не будет, то ничего не делаем
+        if (best.score <= 0)
             return null;
 
         return best;
@@ -117,8 +146,20 @@ export class SupportEnemyAI {
         };
     }
 
+    _isGoingToMove(actions) {
+        return actions.find(action => action.type === 'move');
+    }
+
+    _isGoingToAttack(actions) {
+        return actions.find(action => action.type === 'attack' || action.type === 'rangedAttack' || action.type === 'sniperShot');
+    }
+
     // Нужно балансить и улучшать
-    _scoreCandidate(buffType, unit, features) {
+    _scoreCandidate(buffType, unit, actionPlan, features) {
+        
+        if (!actionPlan)
+            return 0;
+        
         const maxDistance = this._getMaxDistance();
         const distNorm = clamp01(features.distToPlayer / maxDistance + 0.2);
         const closeNorm = 1 - distNorm;
@@ -128,18 +169,15 @@ export class SupportEnemyAI {
         const allyNorm = clamp01(features.alliesNearby / 4);
         const roleBonus = this._roleBonus(buffType, unit.role);
 
-        // Надо проверять собирается ли куда-то идти
-        if (buffType === BUFF_TYPES.SPEED) {
+        if (buffType === BUFF_TYPES.SPEED && this._isGoingToMove(actionPlan.actions)) {
             return clamp01(0.5 * moveRangeDeficitNorm + 0.3 * damageNorm + 0.1 * distNorm + 0.1 * roleBonus);
         }
 
-        // Надо проверять может ли атаковать на этом ходу
-        if (buffType === BUFF_TYPES.ATTACK) {
+        if (buffType === BUFF_TYPES.ATTACK && this._isGoingToAttack(actionPlan.actions)) {
             return clamp01(0.5 * damageNorm + 0.35 * closeNorm + 0.15 * roleBonus);
         }
 
-        // Если будет что-то делать
-        if (buffType === BUFF_TYPES.EXTRA_TURN) {
+        if (buffType === BUFF_TYPES.EXTRA_TURN && actionPlan.actions.length > 0) {
             return clamp01(
                 0.5 * damageNorm +
                 0.2 * closeNorm +

@@ -11,8 +11,9 @@ export class PathfindingService {
         const queue = [{ tile: startTile, steps: 0 }];
         const reachable = [];
         visited.add(this._key(startTile));
-        while (queue.length > 0) {
-            const { tile, steps } = queue.shift();
+        let head = 0;
+        while ( head < queue.length) {
+            const { tile, steps } = queue[head++];
             if (steps > 0) reachable.push(tile);
             if (steps >= range) continue;
             for (const neighbor of this._getNeighbors(tile)) {
@@ -44,9 +45,10 @@ export class PathfindingService {
 
         visited.set(this._key(start), 0);
 
-        while (queue.length > 0) {
+        let head = 0;
+        while (head < queue.length) {
 
-            const { tile, steps, path } = queue.shift();
+            const { tile, steps, path } = queue[head++];
 
             if (tile === end) {
                 return path;
@@ -92,6 +94,59 @@ export class PathfindingService {
         return null;
     }
 
+    getDistance(start, end, maxSteps = Infinity, ignoreOtherUnits = false) {
+        if (!start || !end) return Infinity;
+        if (start === end) return 0;
+
+        const total = this.cols * this.rows;
+        const dist = new Int32Array(total);
+        dist.fill(-1);
+
+        const queue = new Array(total);
+        let head = 0;
+        let tail = 0;
+
+        dist[this._index(start)] = 0;
+        queue[tail++] = start;
+
+        while (head < tail) {
+            const tile = queue[head++];
+            const steps = dist[this._index(tile)];
+
+            if (tile === end) {
+                return steps;
+            }
+
+            if (steps >= maxSteps) {
+                continue;
+            }
+
+            for (const neighbor of this._getNeighbors(tile)) {
+                if (!neighbor.walkable) {
+                    continue;
+                }
+
+                if (!ignoreOtherUnits &&
+                    neighbor.unit &&
+                    neighbor !== end &&
+                    neighbor.unit !== start.unit
+                ) {
+                    continue;
+                }
+
+                const idx = this._index(neighbor);
+                if (dist[idx] !== -1) {
+                    continue;
+                }
+
+                dist[idx] = steps + 1;
+                queue[tail++] = neighbor;
+            }
+        }
+
+        return Infinity;
+    }
+
     _getNeighbors(tile) {
         const neighbors = [];
         const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
@@ -106,9 +161,9 @@ export class PathfindingService {
     }
 
     pathDistance(a, b) {
-        const path = this.findPath(a, b, Infinity, true);
-        return path ? path.length : Infinity;
+        return this.getDistance(a, b, Infinity, true);
     }
 
+    _index(tile) { return tile.gridY * this.cols + tile.gridX; }
     _key(tile) { return `${tile.gridX},${tile.gridY}`; }
 }

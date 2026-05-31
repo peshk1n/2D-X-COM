@@ -7,41 +7,43 @@ export class SupportAI {
         return enemy.role === 'support';
     }
 
-    process(enemy) {
+    getActionsPlan(enemy, actionsLeft) {
+
         const closestData = this.scene.blackboard.getClosestPlayer(enemy);
+
+        if (!closestData) { return null; }
 
         const closest = closestData.unit;
         const distanceToClosest = closestData.distance;
 
-        if (!closest || !closest.isAlive) { return; }
-
-        if (distanceToClosest <= 3) {
+        if (distanceToClosest <= 2) {
             const tilesToGo = this.scene.pathfinder.getTilesInRange(enemy.tile, enemy.moveRange);
 
             // Некуда убегать
             if (tilesToGo.length === 0) {
-                this.scene.supportAI.applyBestBuff(enemy);
-                this.endEnemyTurn(enemy);
-                return;
+                return { actions: [{type: 'buff'}]};
             }
 
             const mostDistantFromPlayers = this.scene.blackboard.getTheMostDistantTileFromPlayers(tilesToGo, enemy.tile, 7);
+
+            // нет живых игроков
+            if (!mostDistantFromPlayers)
+                return null;
 
             const newClosestPlayerInfo = this.scene.blackboard.getClosestTile(this.scene.unitManager.getPlayerUnits().map(p => p.tile), mostDistantFromPlayers);
 
             // Нет смысла убегать
             if (newClosestPlayerInfo.distance <= distanceToClosest) {
-                this.scene.supportAI.applyBestBuff(enemy);
-                return;
+                return { actions: [{type: 'buff'}]};
             }
 
-            enemy.moveTo(mostDistantFromPlayers);
+            return { actions: [{type: 'move', tile: mostDistantFromPlayers}]};
         }
         // Если заметил игрока (пока захардкожено)
         else if (distanceToClosest <= 7) {
-            this.scene.supportAI.applyBestBuff(enemy);
+            return { actions: [{type: 'buff'}]};
         }
 
-
+        return null;
     }
 }

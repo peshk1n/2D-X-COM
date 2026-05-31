@@ -50,20 +50,24 @@ export class WorldBlackboard {
         return (tilemap.COLS ?? 0) + (tilemap.ROWS ?? 0);
     }
 
-    distanceBetweenUnits(a, b) {
-        return this.distanceBetweenTiles(this.getUnitTile(a), this.getUnitTile(b));
+    distanceBetweenUnits(a, b, distanceLimit = Infinity) {
+        return this.distanceBetweenTiles(this.getUnitTile(a), this.getUnitTile(b), distanceLimit);
     }
 
-    distanceBetweenTiles(t1, t2) {
-        const path = this.scene.pathfinder.findPath(t1, t2, Infinity, true);
-        if (!path)
-            return Infinity;
-        
-        return path.length;
+    distanceBetweenTiles(t1, t2, distanceLimit = Infinity) {
+        return this.scene.pathfinder.getDistance(t1, t2, distanceLimit, true);
     }
     
     isEnemyUnitVisible(unit) {
         return this.scene.fogOfWar.isExplored(this.getUnitTile(unit));
+    }
+
+    getClosestPlayerForTile(tile) {
+        return this.getClosestUnitForTile(this.scene.unitManager.getPlayerUnits(), tile);
+    }
+
+    getClosestEnemyForTile(tile) {
+        return this.getClosestUnitForTile(this.scene.unitManager.getEnemyUnits(), tile);
     }
 
     getClosestPlayer(unit) {
@@ -76,11 +80,13 @@ export class WorldBlackboard {
 
     getClosestTile(tiles, tile) {
         let best = null;
+        let distanceLimit = Infinity;
 
         for (const t of tiles) {
-            const distance = this.distanceBetweenTiles(tile, t);
+            const distance = this.distanceBetweenTiles(tile, t, distanceLimit);
             if (!best || distance < best.distance) {
                 best = { tile: t, distance: distance };
+                distanceLimit = distance;
             }
         }
 
@@ -104,7 +110,7 @@ export class WorldBlackboard {
 
         for (const t of tiles) {
             const distancesSum = MathUtils.sum(
-                units.filter(unit => this.distanceBetweenTiles(this.getUnitTile(unit), currentTile) <= checkRange)
+                units.filter(unit => this.distanceBetweenTiles(this.getUnitTile(unit), currentTile, checkRange) <= checkRange)
                     .map(unit => this.distanceBetweenTiles(this.getUnitTile(unit), t))
             );
 
@@ -117,23 +123,29 @@ export class WorldBlackboard {
         return bestTile;
     }
 
-    getClosestUnit(units, unit) {
+    getClosestUnitForTile(units, tile) {
         let best = null;
+        let distanceLimit = Infinity;
 
         for (const u of units) {
-            const distance = this.distanceBetweenUnits(unit, u);
+            const distance = this.distanceBetweenTiles(tile, this.getUnitTile(u), distanceLimit);
             if (!best || distance < best.distance) {
                 best = { unit: u, distance: distance };
+                distanceLimit = distance;
             }
         }
 
         return best;
     }
 
+    getClosestUnit(units, unit) {
+        return this.getClosestUnitForTile(units, this.getUnitTile(unit));
+    }
+
     getAlliesInRange(unit, range) {
         let allies = unit.type === 'player' ? this.scene.unitManager.getPlayerUnits() : this.scene.unitManager.getEnemyUnits();
         allies = allies.filter((ally) => ally !== unit);
-        return allies.filter((ally) => this.distanceBetweenUnits(unit, ally) <= range);
+        return allies.filter((ally) => this.distanceBetweenUnits(unit, ally, range) <= range);
     }
 
     getUnitAtGrid(gx, gy) {

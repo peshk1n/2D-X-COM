@@ -75,37 +75,19 @@ export class TurnManager {
     }
 
     enemyAct(enemy) {
-        this.scene.aiOrchestrator.processAIActions(enemy);
-        enemy.endTurn();
-        this.scene.time.delayedCall(300, () => this.processEnemyTurn());
+        this.scene.aiOrchestrator.processAIActions(enemy, () => {
+            // Повторный ход
+            if (enemy.consumeExtraTurn()) {
+                this.scene.time.delayedCall(300, () => this.enemyAct(enemy));
+                return;
+            }
+            enemy.endTurn();
+            this.scene.time.delayedCall(300, () => this.processEnemyTurn());
+        });
     }
 
     tickEnemyBuffs() {
         this.scene.unitManager.getEnemyUnits().forEach(e => e.tickBuffs());
-    }
-
-    skipEnemyTurn(enemy) {
-        enemy.endTurn();
-        this.startNextEnemyTurn(0);
-    }
-
-    endEnemyTurn(enemy) {
-        // Повторный ход
-        if (enemy.consumeExtraTurn()) {
-            this.startNextEnemyTurn(500);
-            return;
-        }
-
-        enemy.endTurn();
-        this.startNextEnemyTurn();
-    }
-
-    startNextEnemyTurn(delay = 300) {
-        if (delay === 0) {
-            this.processEnemyTurn();
-            return;
-        }
-        this.scene.time.delayedCall(delay, () => this.processEnemyTurn());
     }
 
 }

@@ -14,21 +14,106 @@ export class AIOrchestrator {
         this.aiControllers = [new SupportAI(scene), new BruteAI(scene), new SniperAI(scene), new AlingAI(scene), new SummonerAI(scene), new StupidAI(scene)];
     }
 
-    processAIActions(enemy) {
-        for (const controller of this.aiControllers) {
+    processAIActions(enemy, onComplete) {
 
-            //В canProcess каждый должен проверять именно свой тип противников
+        const chosenController = this.getAIForEnemy(enemy);
+
+        if (!chosenController) {
+            onComplete();
+            return false;
+        }
+
+        const enemyPlan = chosenController.getActionsPlan(enemy, enemy.actionsLeft);
+
+        if (!enemyPlan || enemyPlan.actions.length === 0) {
+            onComplete();
+            return true;
+        }
+
+        this._executeEnemyPlan(enemy, enemyPlan, this.scene, this.scene.combatManager, onComplete);
+
+        return true;
+    }
+
+    getAIForEnemy(enemy) {
+        for (const controller of this.aiControllers) {
+            
+            // В canProcess каждый должен проверять именно свой тип противников
             if (!controller.canProcess(enemy)) {
                 continue;
             }
 
-            //Все действия противника применяем прям в process, окончание 
-            //хода и задержка будут обработаны извне
-            controller.process(enemy);
-
-            return true;
+            return controller;
         }
 
-        return false;
+        return null;
+    }
+
+    _executeEnemyPlan(enemy, plan, scene, combat, onComplete) {
+
+        let currentActionIndex = 0;
+
+        executeNext();
+
+        function executeNext() {
+
+            const action =
+                plan.actions[currentActionIndex];
+
+            currentActionIndex++;
+
+            switch (action.type) {
+
+                case 'move':
+
+                    scene.movementManager.moveUnitTo(
+                        enemy,
+                        action.tile
+                    );
+
+                    break;
+
+                case 'attack':
+
+                    combat.performMeleeAttack(
+                        enemy,
+                        action.target
+                    );
+
+                    break;
+
+                case 'rangedAttack':
+
+                    combat.performRangedAttack(
+                        enemy,
+                        action.target
+                    );
+
+                    break;
+
+                case 'buff':
+
+                    scene.supportAI.applyBestBuff(enemy);
+
+                    break;
+
+                case 'sniperShot':
+
+                    combat.performSniperShot(
+                        enemy, 
+                        action.target
+                    );
+
+                    break;
+            }
+
+            if (currentActionIndex >= plan.actions.length) {
+                onComplete();
+                return;
+            }
+            else {
+                scene.time.delayedCall(300, () => executeNext());
+            }
+        }
     }
 }

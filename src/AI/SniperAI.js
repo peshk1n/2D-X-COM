@@ -7,12 +7,13 @@ export class SniperAI {
         return enemy.role === 'sniper';
     }
 
-    process(enemy) {
+    getActionsPlan(enemy, actionsLeft) {
         const closestData = this.scene.blackboard.getClosestPlayer(enemy);
+
+        if (!closestData) { return null; }
+
         const closestPlayer = closestData.unit;
         const distanceToClosestPlayer = closestData.distance;
-
-        if (!closestPlayer || !closestPlayer.isAlive) { return; }
 
         const enemyTile = enemy.tile;
         const playerTile = closestPlayer.tile;
@@ -20,8 +21,7 @@ export class SniperAI {
         const hasDirectLoS = this.scene.fogOfWar.hasLineOfSight(enemyTile, playerTile, 12);
 
         if (distanceToClosestPlayer >= 8 && distanceToClosestPlayer <= 12 && hasDirectLoS) {
-            this.scene.combatManager.performSniperShot(enemy, closestPlayer);
-            return true;
+            return { actions: [{type: 'sniperShot', target: closestPlayer}] };
         }
 
         if (distanceToClosestPlayer < 8) {
@@ -47,18 +47,20 @@ export class SniperAI {
             if (tilesWithLoS.length > 0) {
                 tilesWithLoS.sort((a, b) => b.distanceToPlayer - a.distanceToPlayer);
                 const bestTile = tilesWithLoS[0].tile;
-                enemy.moveTo(bestTile);
                 
-                const newEnemyTile = enemy.tile;
+                const plan = { actions: [{type: 'move', tile: bestTile}] };
+                
+                actionsLeft--;
+
+                const newEnemyTile = bestTile;
                 if (this.scene.fogOfWar.hasLineOfSight(newEnemyTile, playerTile)) {
-                    this.scene.combatManager.performSniperShot(enemy, closestPlayer);
+                    plan.actions.push({type: 'sniperShot', target: closestPlayer});
                 }
-                return true;
+                return plan;
             }
             
             if (hasDirectLoS) {
-                this.scene.combatManager.performSniperShot(enemy, closestPlayer);
-                return true;
+                return { actions: [{type: 'sniperShot', target: closestPlayer}] };
             }
             
             const mostDistantFromPlayers = this.scene.blackboard.getTheMostDistantTileFromPlayers(
@@ -68,12 +70,10 @@ export class SniperAI {
             );
             
             if (mostDistantFromPlayers) {
-                enemy.moveTo(mostDistantFromPlayers);
+                return { actions: [{type: 'move', tile: mostDistantFromPlayers}] };
             }
-            
-            return true;
         }
 
-        return false;
+        return null;
     }
 }

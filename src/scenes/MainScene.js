@@ -73,7 +73,7 @@ export class MainScene extends Phaser.Scene {
 
         this.unitManager.createUnits(this.tilemap);
 
-        this.supportAI = new SupportEnemyAI(this.unitManager, this.blackboard);
+        this.supportAI = new SupportEnemyAI(this.unitManager, this.blackboard, this.aiOrchestrator);
 
         this.createUI();
 

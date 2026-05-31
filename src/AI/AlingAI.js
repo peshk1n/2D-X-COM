@@ -9,7 +9,7 @@ export class AlingAI {
         return enemy.role === 'swarm';
     }
 
-    process(enemy) {
+    getActionsPlan(enemy, actionsLeft) {
 
         const pathfinder = this.scene.pathfinder;
         const combat = this.scene.combatManager;
@@ -134,13 +134,6 @@ export class AlingAI {
                 });
             }
         }
-
-
-        if (!bestPlan) {
-            return;
-        }
-
-        executePlan(bestPlan, this.scene);
 
         function evaluatePlan(plan) {
 
@@ -283,52 +276,6 @@ export class AlingAI {
             }
         }
 
-
-        function executePlan(plan, scene) {
-
-            let currentActionIndex = 0;
-
-            executeNext();
-
-            function executeNext() {
-
-                if (currentActionIndex >= plan.actions.length) {
-                    return;
-                }
-
-                const action =
-                    plan.actions[currentActionIndex];
-
-                currentActionIndex++;
-
-                switch (action.type) {
-
-                    case 'move':
-
-                        scene.movementManager.moveUnitTo(
-                            enemy,
-                            action.tile
-                        );
-
-                        executeNext();
-
-                        break;
-
-                    case 'attack':
-
-                        combat.performMeleeAttack(
-                            enemy,
-                            action.target
-                        );
-
-                        executeNext();
-
-                        break;
-                }
-            }
-        }
-
-
         function isVisibleForPlayer(tile, player) {
 
             const dist =
@@ -339,6 +286,8 @@ export class AlingAI {
 
             return dist <= 8;
         }
+
+        return bestPlan;
     }
 
     _isVisibleToSwarm(tile, swarmUnits, self, player) {
