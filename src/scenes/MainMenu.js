@@ -34,9 +34,13 @@ export class MainMenu extends Phaser.Scene {
 
         AudioManager.init(this, 'bgMusic', { volume: 0.5 });
 
-        const startMusic = () => {
+        this.input.once('pointerdown', () => {
             AudioManager.playMusic();
-        };
+        });
+
+        this.input.keyboard.once('keydown', () => {
+            AudioManager.playMusic();
+        });
 
         this.createButtons();
     }
