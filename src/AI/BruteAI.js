@@ -49,8 +49,17 @@ export class BruteAI {
             return plan;
         }
 
-        if (distance <= 7) {
+        if (distance <= 7)
+        {
             const pathToPoint = pathfinder.findPath(fromTile, closest.tile, 7);
+            if (pathToPoint && pathToPoint.length > 0)
+            {
+                enemy.targettile = closest.tile
+            }
+        }
+
+        if (enemy.targettile && this.scene.blackboard.distanceBetweenTiles(enemy.targettile, fromTile) > 0) {
+            const pathToPoint = pathfinder.findPath(fromTile, enemy.targettile, 7);
             if (pathToPoint && pathToPoint.length > 0) {
                 const stepCount = Math.min(enemy.moveRange, pathToPoint.length);
                 const nextTile = pathToPoint[stepCount - 1];
