@@ -33,13 +33,7 @@ export class UnitManager {
             allTiles.push(...allSpawnTiles);
         }
         
-        const selectedTiles = this.getRandomTilesFromAllMap(allTiles, 8);
-        
-        if (selectedTiles.length < 8) {
-            console.warn('Недостаточно тайлов для всех юнитов');
-            return;
-        }
-
+        // Определяем юнитов
         const playerDefs = [
             { name: 'Медик', hp: 100, attack: 10, defense: 8, accuracy: 70, role: 'medic' },
             { name: 'Снайпер', hp: 80, attack: 15, defense: 5, accuracy: 85, role: 'sniper' },
@@ -53,16 +47,26 @@ export class UnitManager {
             sniper: { name: 'Вражеский снайпер', hp: 70, ap: 2, attack: 16, defense: 4, accuracy: 85, role: 'sniper' },
             brute: { name: 'Толстяк', hp: 130, ap: 1, attack: 22, defense: 8, accuracy: 60, role: 'brute' },
             mage: { name: 'Маг', hp: 80, ap: 2, attack: 8, defense: 4, accuracy: 70, role: 'support', textureKey: 'enemy_support_unit' },
-            summoner: { name: 'Призыватель', hp: 60, ap: 2, attack: 6, defense: 4, accuracy: 60, role: 'summoner', moveRange: 2, maxSummonedUnits: 3,
-                minionRoles: ['swarm'],
-                minionConfigs: [{ name: 'Алинг (миньон)', hp: 25, attack: 15, defense: 8, accuracy: 50, role: "swarm", moveRange: 4 }]
+            summoner: { name: 'Призыватель', hp: 60, ap: 2, attack: 6, defense: 4, accuracy: 60, role: 'summoner', moveRange: 2, maxSummonedUnits: 3,minionRoles: ['swarm'],minionConfigs: [{ 
+                    name: 'Алинг (миньон)', hp: 25, attack: 15, defense: 8, accuracy: 50, role: "swarm", moveRange: 4 
+                }]
             }
         };
 
+        // Гарантированно получаем 8 тайлов
+        const selectedTiles = this.ensureMinimumTiles(allTiles, 8);
+        
+        if (!selectedTiles || selectedTiles.length < 8) {
+            console.error('КРИТИЧЕСКАЯ ОШИБКА: Невозможно получить 8 тайлов для спавна юнитов');
+            return this.createUnitsWithFallback(tilemapService, selectedTiles, playerDefs, enemyDefs);
+        }
+
         const assignments = this.assignAllPositions(selectedTiles, playerDefs, enemyDefs);
         
-        assignments.forEach((assignment) => {
-            if (!assignment) return;
+        // Финальная проверка и гарантированное заполнение всех 8 слотов
+        const finalAssignments = this.ensureAllUnitsAssigned(assignments, selectedTiles, playerDefs, enemyDefs);
+        
+        finalAssignments.forEach((assignment) => {
             const { tile, def, type } = assignment;
             const { x, y } = toXY(tile);
             const unit = new Unit(this.scene, x, y, { ...def, type: type });
@@ -75,10 +79,114 @@ export class UnitManager {
             }
             this.allUnits.push(unit);
         });
+        
+        console.log(`Заспавнено ${this.allUnits.length} юнитов: ${this.playerUnits.length} игроков, ${this.enemyUnits.length} врагов`);
+    }
+
+    createUnitsWithFallback(tilemapService, selectedTiles, playerDefs, enemyDefs) {
+        const toXY = (tile) => tilemapService.gridToWorld(tile?.gridX || 0, tile?.gridY || 0);
+        const tiles = selectedTiles || [];
+        
+        playerDefs.forEach((def, index) => {
+            const tile = tiles[index] || { gridX: index, gridY: 0 };
+            const { x, y } = toXY(tile);
+            const unit = new Unit(this.scene, x, y, { ...def, type: 'player' });
+            unit.setTile(tile);
+            this.playerUnits.push(unit);
+            this.allUnits.push(unit);
+        });
+        
+        const enemyList = [
+            enemyDefs.mage,
+            enemyDefs.sniper,
+            enemyDefs.alings[0],
+            enemyDefs.brute,
+            enemyDefs.summoner
+        ];
+        
+        enemyList.forEach((def, index) => {
+            const tile = tiles[index + 3] || { gridX: index + 3, gridY: 0 };
+            const { x, y } = toXY(tile);
+            const unit = new Unit(this.scene, x, y, { ...def, type: 'enemy' });
+            unit.setTile(tile);
+            this.enemyUnits.push(unit);
+            this.allUnits.push(unit);
+        });
+    }
+
+    ensureMinimumTiles(allTiles, minCount) {
+        if (!allTiles || allTiles.length === 0) {
+            console.error('Нет доступных тайлов для спавна');
+            return [];
+        }
+        
+        if (allTiles.length >= minCount) {
+            return this.getRandomTilesFromAllMap(allTiles, minCount);
+        }
+        
+        console.warn(`Доступно только ${allTiles.length} тайлов, пытаемся дополнить до ${minCount}`);
+        
+        const extendedTiles = [...allTiles];
+        let attempts = 0;
+        const maxAttempts = minCount * 10;
+        
+        while (extendedTiles.length < minCount && attempts < maxAttempts) {
+            const sourceTile = allTiles[Math.floor(Math.random() * allTiles.length)];
+            const virtualTile = this.createVirtualTile(sourceTile, extendedTiles);
+            if (virtualTile) {
+                extendedTiles.push(virtualTile);
+            }
+            attempts++;
+        }
+        
+        if (extendedTiles.length < minCount) {
+            for (let i = extendedTiles.length; i < minCount; i++) {
+                const virtualTile = {
+                    gridX: (i * 3) % 20,
+                    gridY: Math.floor(i / 3),
+                    properties: {},
+                    isVirtual: true
+                };
+                extendedTiles.push(virtualTile);
+            }
+        }
+        
+        return extendedTiles;
+    }
+
+    createVirtualTile(sourceTile, existingTiles) {
+        if (!sourceTile) return null;
+        
+        const directions = [
+            { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, 
+            { dx: 0, dy: -1 }, { dx: -1, dy: 0 },
+            { dx: 1, dy: 1 }, { dx: -1, dy: 1 }, 
+            { dx: 1, dy: -1 }, { dx: -1, dy: -1 }
+        ];
+        
+        const shuffled = directions.sort(() => Math.random() - 0.5);
+        
+        for (const dir of shuffled) {
+            const newX = sourceTile.gridX + dir.dx;
+            const newY = sourceTile.gridY + dir.dy;
+            
+            const exists = existingTiles.some(t => t.gridX === newX && t.gridY === newY);
+            if (!exists) {
+                return {
+                    gridX: newX,
+                    gridY: newY,
+                    properties: {},
+                    isVirtual: true
+                };
+            }
+        }
+        
+        return null;
     }
 
     isSpawnableTile(tile) {
         if (!tile) return false;
+        if (tile.isVirtual) return true;
         if (tile.properties) {
             if (tile.properties.isWall || tile.properties.isObstacle || tile.properties.isBlocked) {
                 return false;
@@ -102,20 +210,17 @@ export class UnitManager {
 
     assignAllPositions(allTiles, playerDefs, enemyDefs) {
         if (allTiles.length < 8) {
-            console.warn('Недостаточно тайлов для всех юнитов');
-            return [];
+            console.warn(`Недостаточно тайлов (${allTiles.length}) для всех юнитов, продолжаем с доступными`);
         }
 
         const assignments = [];
         const usedTiles = new Set();
 
-        // Выбираем начальный тайл для группы игроков
         const shuffledTiles = this.getRandomTilesFromAllMap(allTiles, allTiles.length);
+        if (shuffledTiles.length === 0) return assignments;
         
-        // Выбираем центральный тайл для группы игроков
         const playerCenter = shuffledTiles[0];
         
-        // Находим ближайшие тайлы к центру игроков для формирования компактной группы
         const tilesByDistanceToPlayerCenter = [...shuffledTiles]
             .filter(t => t !== playerCenter)
             .sort((a, b) => {
@@ -124,43 +229,168 @@ export class UnitManager {
                 return distA - distB;
             });
         
-        // Берем 2 ближайших тайла к центру для игроков
         const playerZone = [playerCenter, ...tilesByDistanceToPlayerCenter.slice(0, 2)];
+        const enemyZone = tilesByDistanceToPlayerCenter.slice(2, 7);
         
-        // Остальные тайлы для врагов
-        const enemyZone = tilesByDistanceToPlayerCenter.slice(2, 9);
-        
-        // Если врагов меньше 7, добираем из оставшихся
-        if (enemyZone.length < 7) {
+        if (enemyZone.length < 5) {
             const remainingTiles = shuffledTiles.filter(t => !playerZone.includes(t) && !enemyZone.includes(t));
-            enemyZone.push(...remainingTiles.slice(0, 7 - enemyZone.length));
+            enemyZone.push(...remainingTiles.slice(0, 5 - enemyZone.length));
         }
         
-        // Определяем позиции врагов по расстоянию до игроков (1 - ближе всех, 4 - дальше всех)
         const enemyPositions = this.calculateEnemyPositionsByDistance(enemyZone, playerZone);
-        
-        // Определяем позиции игроков по расстоянию до врагов (1 - ближе всех, 3 - дальше всех)
         const playerPositions = this.calculatePlayerPositionsByDistance(playerZone, enemyZone);
         
-        // Расставляем игроков согласно их правилам
-        const playerAssignments = this.assignPlayerPositions(playerPositions, playerDefs);
+        // Расставляем игроков
+        const playerAssignments = this.assignPlayerPositionsGuaranteed(playerPositions, playerDefs, allTiles);
         playerAssignments.forEach(a => {
-            if (a) {
-                assignments.push({ ...a, type: 'player' });
-                usedTiles.add(a.tile);
-            }
+            assignments.push({ ...a, type: 'player' });
+            usedTiles.add(a.tile);
         });
 
-        // Расставляем врагов согласно их правилам
-        const enemyAssignments = this.assignEnemyPositions(enemyPositions, enemyDefs, usedTiles, playerAssignments);
+        // Расставляем врагов с передачей информации об игроках
+        const enemyAssignments = this.assignEnemyPositionsGuaranteed(enemyPositions, enemyDefs, allTiles, usedTiles, playerAssignments);
         enemyAssignments.forEach(a => {
-            if (a) {
-                assignments.push({ ...a, type: 'enemy' });
-                usedTiles.add(a.tile);
-            }
+            assignments.push({ ...a, type: 'enemy' });
+            usedTiles.add(a.tile);
         });
 
         return assignments;
+    }
+
+    assignPlayerPositionsGuaranteed(positions, playerDefs, allTiles) {
+        const assignments = [];
+        const usedTiles = new Set();
+        
+        const strategicAssignments = this.assignPlayerPositions(positions, playerDefs);
+        
+        const assignedDefs = new Set(strategicAssignments.filter(a => a).map(a => a.def));
+        
+        playerDefs.forEach(def => {
+            if (!assignedDefs.has(def)) {
+                const availableTile = this.findAnyAvailableTile(allTiles, usedTiles);
+                if (availableTile) {
+                    assignments.push({ tile: availableTile, def: def });
+                    usedTiles.add(availableTile);
+                }
+            }
+        });
+        
+        strategicAssignments.forEach(a => {
+            if (a && a.tile && a.def) {
+                if (!assignments.some(existing => existing.def === a.def)) {
+                    assignments.push(a);
+                    usedTiles.add(a.tile);
+                }
+            }
+        });
+        
+        return assignments.slice(0, 3);
+    }
+
+    assignEnemyPositionsGuaranteed(positions, enemyDefs, allTiles, usedTiles, playerAssignments) {
+        const assignments = [];
+        const allUsedTiles = new Set(usedTiles);
+        
+        const strategicAssignments = this.assignEnemyPositions(positions, enemyDefs, allUsedTiles, playerAssignments);
+        
+        const requiredEnemies = [
+            enemyDefs.mage,
+            enemyDefs.sniper,
+            enemyDefs.alings[0],
+            enemyDefs.brute,
+            enemyDefs.summoner
+        ];
+        
+        const assignedDefs = new Set();
+        strategicAssignments.forEach(a => {
+            if (a && a.tile && a.def) {
+                assignments.push(a);
+                allUsedTiles.add(a.tile);
+                assignedDefs.add(a.def);
+            }
+        });
+        
+        requiredEnemies.forEach(def => {
+            if (!assignedDefs.has(def)) {
+                const availableTile = this.findAnyAvailableTile(allTiles, allUsedTiles);
+                if (availableTile) {
+                    assignments.push({ tile: availableTile, def: def });
+                    allUsedTiles.add(availableTile);
+                } else {
+                    console.warn(`Не удалось найти тайл для врага: ${def.name}`);
+                }
+            }
+        });
+        
+        return assignments.slice(0, 5);
+    }
+
+    findAnyAvailableTile(allTiles, usedTiles) {
+        const available = allTiles.filter(tile => !usedTiles.has(tile));
+        if (available.length > 0) {
+            return available[Math.floor(Math.random() * available.length)];
+        }
+        
+        const virtualTiles = allTiles.filter(t => t.isVirtual && !usedTiles.has(t));
+        if (virtualTiles.length > 0) {
+            return virtualTiles[0];
+        }
+        
+        return null;
+    }
+
+    ensureAllUnitsAssigned(assignments, selectedTiles, playerDefs, enemyDefs) {
+        const requiredCount = {
+            player: 3,
+            enemy: 5
+        };
+        
+        const currentCount = {
+            player: assignments.filter(a => a.type === 'player').length,
+            enemy: assignments.filter(a => a.type === 'enemy').length
+        };
+        
+        const usedTiles = new Set(assignments.map(a => a.tile));
+        const result = [...assignments];
+        
+        if (currentCount.player < requiredCount.player) {
+            const missingPlayerDefs = playerDefs.slice(currentCount.player);
+            missingPlayerDefs.forEach(def => {
+                const availableTile = this.findAnyAvailableTile(selectedTiles, usedTiles);
+                if (availableTile) {
+                    result.push({ tile: availableTile, def: def, type: 'player' });
+                    usedTiles.add(availableTile);
+                }
+            });
+        }
+        
+        if (currentCount.enemy < requiredCount.enemy) {
+            const allEnemyDefs = [
+                enemyDefs.mage,
+                enemyDefs.sniper,
+                enemyDefs.alings[0],
+                enemyDefs.brute,
+                enemyDefs.summoner
+            ];
+            
+            const assignedEnemyRoles = new Set(
+                result
+                    .filter(a => a.type === 'enemy')
+                    .map(a => a.def.role)
+            );
+            
+            const missingEnemyDefs = allEnemyDefs.filter(def => !assignedEnemyRoles.has(def.role));
+            
+            missingEnemyDefs.forEach(def => {
+                const availableTile = this.findAnyAvailableTile(selectedTiles, usedTiles);
+                if (availableTile) {
+                    result.push({ tile: availableTile, def: def, type: 'enemy' });
+                    usedTiles.add(availableTile);
+                }
+            });
+        }
+        
+        return result;
     }
 
     calculateEnemyPositionsByDistance(enemyTiles, playerTiles) {
@@ -178,10 +408,10 @@ export class UnitManager {
         });
         
         return {
-            1: sortedByDistance.slice(0, 2),    // Самые близкие к игрокам
-            2: sortedByDistance.slice(2, 4),    // Средне-близкие
-            3: sortedByDistance.slice(4, 6),    // Средне-дальние
-            4: sortedByDistance.slice(6, 7)     // Самые дальние
+            1: sortedByDistance.slice(0, 1),
+            2: sortedByDistance.slice(1, 2),
+            3: sortedByDistance.slice(2, 3),
+            4: sortedByDistance.slice(3, 5)
         };
     }
 
@@ -200,15 +430,15 @@ export class UnitManager {
         });
         
         return {
-            1: sortedByDistance.slice(0, 1),    // Самый близкий к врагам
-            2: sortedByDistance.slice(1, 2),    // Средний
-            3: sortedByDistance.slice(2, 3)     // Самый дальний
+            1: sortedByDistance.slice(0, 1),
+            2: sortedByDistance.slice(1, 2),
+            3: sortedByDistance.slice(2, 3)
         };
     }
 
     assignPlayerPositions(positions, playerDefs) {
         if (!positions[1]?.length || !positions[2]?.length || !positions[3]?.length) {
-            console.warn('Недостаточно тайлов для игроков');
+            console.warn('Недостаточно тайлов для оптимального размещения игроков');
             return [];
         }
 
@@ -218,15 +448,15 @@ export class UnitManager {
         const sniper = playerDefs.find(d => d.role === 'sniper');
         const assault = playerDefs.find(d => d.role === 'assault');
 
-        // Медик: только позиции 2-3, высокий приоритет укрытий, LOS к союзнику
+        // Медик: позиции 2-3, высокий приоритет укрытий, LOS к союзнику
         const medicPositions = [...positions[2], ...positions[3]];
-        const medicTile = this.getMedicTile(medicPositions, usedTiles, positions);
+        const medicTile = this.getMedicTileImproved(medicPositions, usedTiles, positions);
         if (medicTile && medic) {
             assignments.push({ tile: medicTile, def: medic });
             usedTiles.add(medicTile);
         }
 
-        // Снайпер: только позиции 2-3, высокий приоритет укрытий
+        // Снайпер: позиции 2-3, высокий приоритет укрытий
         const sniperPositions = [...positions[2], ...positions[3]].filter(t => !usedTiles.has(t));
         const sniperTile = this.getSniperTile(sniperPositions, usedTiles);
         if (sniperTile && sniper) {
@@ -234,9 +464,9 @@ export class UnitManager {
             usedTiles.add(sniperTile);
         }
 
-        // Штурмовик: только позиции 1-2, пониженная вероятность рядом со снайпером
+        // Штурмовик: позиции 1-2, ниже вероятность рядом со снайпером, выше - с медиком
         const assaultPositions = [...positions[1], ...positions[2]].filter(t => !usedTiles.has(t));
-        const assaultTile = this.getAssaultTile(assaultPositions, usedTiles, assignments);
+        const assaultTile = this.getAssaultTileImproved(assaultPositions, usedTiles, assignments);
         if (assaultTile && assault) {
             assignments.push({ tile: assaultTile, def: assault });
             usedTiles.add(assaultTile);
@@ -245,15 +475,17 @@ export class UnitManager {
         return assignments;
     }
 
-    getMedicTile(availableTiles, usedTiles, allPositions) {
+    // Улучшенный метод для медика с гарантированным LOS
+    getMedicTileImproved(availableTiles, usedTiles, allPositions) {
         const available = availableTiles.filter(tile => !usedTiles.has(tile));
         if (available.length === 0) return null;
 
         // Сначала ищем тайлы с укрытием
         const tilesWithCover = this.sortByCoverPriority(available);
         
-        // Из них выбираем те, что имеют LOS к другим позициям союзников
+        // Ищем тайлы с LOS к любой возможной позиции союзника
         const tilesWithLOS = tilesWithCover.filter(tile => {
+            // Проверяем все незанятые позиции союзников
             for (const pos of [1, 2, 3]) {
                 if (allPositions[pos]) {
                     for (const allyTile of allPositions[pos]) {
@@ -265,19 +497,52 @@ export class UnitManager {
                     }
                 }
             }
+            // Если нет незанятых, проверяем все возможные позиции
+            for (const pos of [1, 2, 3]) {
+                if (allPositions[pos]) {
+                    for (const allyTile of allPositions[pos]) {
+                        if (allyTile !== tile) {
+                            if (this.hasLineOfSight(tile, allyTile)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
             return false;
         });
 
         if (tilesWithLOS.length > 0) {
-            return tilesWithLOS[0]; // Лучший тайл с укрытием и LOS
+            return tilesWithLOS[0];
         }
         
-        // Если нет с LOS, берем лучший с укрытием
         if (tilesWithCover.length > 0) {
+            // Если нет LOS, выбираем лучший с укрытием
+            for (const tile of tilesWithCover) {
+                // Проверяем хотя бы примерный LOS к центру союзников
+                const allyCenter = this.calculateAllyCenter(allPositions);
+                if (allyCenter && this.hasLineOfSight(tile, allyCenter)) {
+                    return tile;
+                }
+            }
             return tilesWithCover[0];
         }
         
         return this.getRandomFromArray(available);
+    }
+
+    calculateAllyCenter(allPositions) {
+        let totalX = 0, totalY = 0, count = 0;
+        for (const pos of [1, 2, 3]) {
+            if (allPositions[pos]) {
+                for (const tile of allPositions[pos]) {
+                    totalX += tile.gridX;
+                    totalY += tile.gridY;
+                    count++;
+                }
+            }
+        }
+        return count > 0 ? { gridX: Math.round(totalX / count), gridY: Math.round(totalY / count) } : null;
     }
 
     getSniperTile(availableTiles, usedTiles) {
@@ -288,52 +553,56 @@ export class UnitManager {
         return tilesWithCover.length > 0 ? tilesWithCover[0] : this.getRandomFromArray(available);
     }
 
-    getAssaultTile(availableTiles, usedTiles, existingAssignments) {
+    // Улучшенный метод для штурмовика с вероятностным подходом
+    getAssaultTileImproved(availableTiles, usedTiles, existingAssignments) {
         let available = availableTiles.filter(tile => !usedTiles.has(tile));
         if (available.length === 0) return null;
 
         const sniperAssignment = existingAssignments.find(a => a?.def?.role === 'sniper');
         const medicAssignment = existingAssignments.find(a => a?.def?.role === 'medic');
         
-        // Понижаем вероятность рядом со снайпером
-        if (sniperAssignment && available.length > 1) {
-            const farFromSniper = available.filter(tile => {
-                const distance = Math.abs(tile.gridX - sniperAssignment.tile.gridX) + 
-                               Math.abs(tile.gridY - sniperAssignment.tile.gridY);
-                return distance > 2;
-            });
-            
-            // Предпочитаем ближе к медику
-            if (medicAssignment && farFromSniper.length > 0) {
-                const nearMedic = farFromSniper.filter(tile => {
-                    const distance = Math.abs(tile.gridX - medicAssignment.tile.gridX) + 
-                                   Math.abs(tile.gridY - medicAssignment.tile.gridY);
-                    return distance <= 2;
-                });
-                
-                if (nearMedic.length > 0) {
-                    return this.getRandomFromArray(nearMedic);
-                }
-            }
-            
-            if (farFromSniper.length > 0) {
-                return this.getRandomFromArray(farFromSniper);
-            }
-        }
+        // Правило: ниже вероятность рядом со снайпером, выше - с медиком
+        let weightedTiles = [];
         
-        return this.getRandomFromArray(available);
+        available.forEach(tile => {
+            let weight = 1.0;
+            
+            if (sniperAssignment?.tile) {
+                const distToSniper = Math.abs(tile.gridX - sniperAssignment.tile.gridX) + 
+                                    Math.abs(tile.gridY - sniperAssignment.tile.gridY);
+                // Значительно понижаем вес для близких к снайперу
+                if (distToSniper <= 2) weight *= 0.3;
+                else if (distToSniper <= 3) weight *= 0.6;
+            }
+            
+            if (medicAssignment?.tile) {
+                const distToMedic = Math.abs(tile.gridX - medicAssignment.tile.gridX) + 
+                                   Math.abs(tile.gridY - medicAssignment.tile.gridY);
+                // Повышаем вес для близких к медику
+                if (distToMedic <= 2) weight *= 2.0;
+                else if (distToMedic <= 3) weight *= 1.5;
+            }
+            
+            weightedTiles.push({ tile, weight });
+        });
+        
+        // Сортируем по весу и выбираем из лучших
+        weightedTiles.sort((a, b) => b.weight - a.weight);
+        
+        // Берем случайный тайл из топ-50%
+        const topCount = Math.max(1, Math.ceil(weightedTiles.length / 2));
+        const selectedIndex = Math.floor(Math.random() * topCount);
+        
+        return weightedTiles[selectedIndex].tile;
     }
 
     hasLineOfSight(tile1, tile2) {
-        // Проверка прямой видимости между двумя тайлами
         const dx = Math.abs(tile1.gridX - tile2.gridX);
         const dy = Math.abs(tile1.gridY - tile2.gridY);
         const distance = dx + dy;
         
-        // Если расстояние больше 5, LOS нет
         if (distance > 5) return false;
         
-        // Проверяем, нет ли препятствий между тайлами
         const steps = Math.max(dx, dy);
         if (steps === 0) return true;
         
@@ -357,8 +626,10 @@ export class UnitManager {
 
     assignEnemyPositions(positions, enemyDefs, usedTiles, playerAssignments) {
         const assignments = [];
+        const playerSniper = playerAssignments?.find(a => a?.def?.role === 'sniper');
+        const playerMedic = playerAssignments?.find(a => a?.def?.role === 'medic');
     
-        // 1. Размещаем мага: позиции 2-3
+        // 1. Размещаем мага (позиции 2-3)
         const magePositions = [...(positions[2] || []), ...(positions[3] || [])];
         const mageTile = this.getRandomTileFromPosition(magePositions, usedTiles);
         if (mageTile) {
@@ -366,7 +637,7 @@ export class UnitManager {
             usedTiles.add(mageTile);
         }
     
-        // 2. Размещаем снайпера: позиции 2-4, приоритет укрытий
+        // 2. Размещаем снайпера (позиции 2-4, высокий приоритет укрытий)
         const sniperPositions = this.sortByCoverPriority([
             ...(positions[2] || []), 
             ...(positions[3] || []), 
@@ -378,35 +649,35 @@ export class UnitManager {
             usedTiles.add(sniperTile);
         }
     
-        // 3. Размещаем алингов: позиции 1-3
-        const alingAssignments = this.assignAlingsPosition(positions, enemyDefs.alings, usedTiles, assignments, playerAssignments);
-        assignments.push(...alingAssignments);
-        alingAssignments.forEach(a => {
-            if (a) usedTiles.add(a.tile);
-        });
+        // 3. Размещаем алинга (позиции 1-3, с правилами вероятности)
+        const alingPositions = [...(positions[1] || []), ...(positions[2] || []), ...(positions[3] || [])];
+        const alingTile = this.getAlingTileWithRules(alingPositions, usedTiles, playerSniper);
+        if (alingTile) {
+            assignments.push({ tile: alingTile, def: enemyDefs.alings[0] });
+            usedTiles.add(alingTile);
+        }
     
-        // 4. Размещаем толстяка: любая позиция
-        const bruteTile = this.assignBrutePosition(positions, usedTiles, assignments, playerAssignments);
+        // 4. Размещаем толстяка (с правилами вероятности)
+        const bruteTile = this.assignBrutePositionWithRules(positions, usedTiles, assignments, playerAssignments);
         if (bruteTile) {
             assignments.push({ tile: bruteTile, def: enemyDefs.brute });
             usedTiles.add(bruteTile);
         }
     
-        // 5. Размещаем саммонера (призывателя): позиции 2-3, предпочитает быть за другими врагами
+        // 5. Размещаем саммонера
         const summonerPositions = this.sortByCoverPriority([
             ...(positions[2] || []),
-            ...(positions[3] || [])
+            ...(positions[3] || []),
+            ...(positions[4] || [])
         ]);
         
-        // Фильтруем позиции, которые находятся за другими врагами (не на передовой)
         const rearSummonerPositions = summonerPositions.filter(tile => {
             const hasEnemyInFront = assignments.some(a => {
-                const dx = a.tile.gridX - tile.gridX;
-                const dy = a.tile.gridY - tile.gridY;
-                const distToPlayer = Math.abs(tile.gridX - (playerAssignments[0]?.tile?.gridX || 0)) + 
-                                    Math.abs(tile.gridY - (playerAssignments[0]?.tile?.gridY || 0));
-                const distEnemyToPlayer = Math.abs(a.tile.gridX - (playerAssignments[0]?.tile?.gridX || 0)) + 
-                                         Math.abs(a.tile.gridY - (playerAssignments[0]?.tile?.gridY || 0));
+                if (!playerAssignments[0]?.tile) return false;
+                const distToPlayer = Math.abs(tile.gridX - playerAssignments[0].tile.gridX) + 
+                                    Math.abs(tile.gridY - playerAssignments[0].tile.gridY);
+                const distEnemyToPlayer = Math.abs(a.tile.gridX - playerAssignments[0].tile.gridX) + 
+                                         Math.abs(a.tile.gridY - playerAssignments[0].tile.gridY);
                 return distEnemyToPlayer < distToPlayer;
             });
             return hasEnemyInFront;
@@ -422,7 +693,7 @@ export class UnitManager {
             usedTiles.add(summonerTile);
         }
     
-        // 6. Проверяем, что маг находится в радиусе хотя бы 2 других врагов
+        // Проверяем позицию мага (должен быть в радиусе 2 других врагов)
         if (mageTile) {
             const mageAssignment = assignments.find(a => a.tile === mageTile);
             const otherEnemies = assignments.filter(a => a.tile !== mageTile && a.def.role !== 'support');
@@ -436,7 +707,6 @@ export class UnitManager {
                 }
             }
             
-            // Если меньше 2 врагов в радиусе, меняем позицию мага
             if (enemiesInRange < 2 && magePositions.length > 1) {
                 const alternativeTiles = magePositions.filter(t => t !== mageTile && !usedTiles.has(t));
                 for (const altTile of alternativeTiles) {
@@ -448,7 +718,6 @@ export class UnitManager {
                     }
                     
                     if (countInRange >= 2) {
-                        // Меняем позицию мага
                         usedTiles.delete(mageTile);
                         mageAssignment.tile = altTile;
                         usedTiles.add(altTile);
@@ -459,6 +728,94 @@ export class UnitManager {
         }
     
         return assignments.filter(a => a !== null);
+    }
+
+    // Новый метод для алинга с правилами вероятности
+    getAlingTileWithRules(alingPositions, usedTiles, playerSniper) {
+        const available = alingPositions.filter(tile => !usedTiles.has(tile));
+        if (available.length === 0) return null;
+        
+        // Правило 2: ниже вероятность рядом со снайпером игрока
+        let weightedTiles = available.map(tile => {
+            let weight = 1.0;
+            
+            if (playerSniper?.tile) {
+                const distToSniper = Math.abs(tile.gridX - playerSniper.tile.gridX) + 
+                                    Math.abs(tile.gridY - playerSniper.tile.gridY);
+                // Значительно понижаем вес для близких к снайперу
+                if (distToSniper <= 2) weight *= 0.2;
+                else if (distToSniper <= 3) weight *= 0.5;
+            }
+            
+            return { tile, weight };
+        });
+        
+        // Сортируем по весу
+        weightedTiles.sort((a, b) => b.weight - a.weight);
+        
+        // Выбираем из топ-60% с наивысшими весами
+        const topCount = Math.max(1, Math.ceil(weightedTiles.length * 0.6));
+        const selectedIndex = Math.floor(Math.random() * topCount);
+        
+        return weightedTiles[selectedIndex].tile;
+    }
+
+    // Улучшенный метод для толстяка с вероятностными правилами
+    assignBrutePositionWithRules(positions, usedTiles, existingAssignments, playerAssignments) {
+        const mageAssignment = existingAssignments.find(a => a?.def?.role === 'support');
+        const playerSniper = playerAssignments?.find(a => a?.def?.role === 'sniper');
+        const playerMedic = playerAssignments?.find(a => a?.def?.role === 'medic');
+        
+        let availableTiles = [];
+        for (const pos of [1, 2, 3, 4]) {
+            if (positions[pos]) {
+                availableTiles.push(...positions[pos].filter(t => !usedTiles.has(t)));
+            }
+        }
+        
+        if (availableTiles.length === 0) return null;
+        
+        // Правило 2: ниже вероятность рядом со снайпером игрока
+        // Правило 3: средняя вероятность (50%) рядом с магом
+        let weightedTiles = availableTiles.map(tile => {
+            let weight = 1.0;
+            
+            // Правило 2: пониженная вероятность рядом со снайпером игрока
+            if (playerSniper?.tile) {
+                const distToSniper = Math.abs(tile.gridX - playerSniper.tile.gridX) + 
+                                    Math.abs(tile.gridY - playerSniper.tile.gridY);
+                if (distToSniper <= 2) weight *= 0.3;
+                else if (distToSniper <= 3) weight *= 0.6;
+            }
+            
+            // Повышенная вероятность рядом с другими союзниками (не снайпером)
+            if (playerMedic?.tile) {
+                const distToMedic = Math.abs(tile.gridX - playerMedic.tile.gridX) + 
+                                   Math.abs(tile.gridY - playerMedic.tile.gridY);
+                if (distToMedic <= 2) weight *= 1.3;
+            }
+            
+            // Правило 3: средняя вероятность (50%) рядом с магом
+            if (mageAssignment?.tile) {
+                const distToMage = Math.abs(tile.gridX - mageAssignment.tile.gridX) + 
+                                  Math.abs(tile.gridY - mageAssignment.tile.gridY);
+                if (distToMage <= 2) {
+                    // 50% шанс быть рядом с магом (реализуется через случайное изменение веса)
+                    weight *= (Math.random() < 0.5) ? 2.0 : 0.5;
+                }
+            }
+            
+            return { tile, weight };
+        });
+        
+        // Сортируем по весу
+        weightedTiles.sort((a, b) => b.weight - a.weight);
+        
+        // Выбираем из топ-60%
+        const topCount = Math.max(1, Math.ceil(weightedTiles.length * 0.6));
+        const selectedIndex = Math.floor(Math.random() * topCount);
+        
+        return weightedTiles[selectedIndex].tile;
     }
 
     sortByCoverPriority(tiles) {
@@ -490,145 +847,6 @@ export class UnitManager {
         return wallCount;
     }
 
-    assignAlingsPosition(positions, alings, usedTiles, existingAssignments, playerAssignments) {
-        const alingAssignments = [];
-        const playerSniper = playerAssignments?.find(a => a?.def?.role === 'sniper');
-        
-        // Хотя бы 1 алинг на позиции 2-3 (позади остальных)
-        const rearPosition = this.getRandomFromArray([2, 3]);
-        const availableRearTiles = positions[rearPosition]?.filter(t => !usedTiles.has(t)) || [];
-        
-        if (availableRearTiles.length > 0) {
-            const rearTile = this.getRandomFromArray(availableRearTiles);
-            alingAssignments.push({ tile: rearTile, def: alings[0] });
-            usedTiles.add(rearTile);
-        } else {
-            // Если нет тайлов на 2-3, ищем на позиции 1
-            const fallbackTiles = positions[1]?.filter(t => !usedTiles.has(t)) || [];
-            if (fallbackTiles.length > 0) {
-                const fallbackTile = this.getRandomFromArray(fallbackTiles);
-                alingAssignments.push({ tile: fallbackTile, def: alings[0] });
-                usedTiles.add(fallbackTile);
-            }
-        }
-        
-        // Остальные алинги: позиции 1-3, пониженная вероятность рядом со снайпером игрока
-        for (let i = alingAssignments.length; i < alings.length; i++) {
-            let availableTiles = [];
-            
-            for (const pos of [1, 2, 3]) {
-                if (positions[pos]) {
-                    const posTiles = positions[pos].filter(t => !usedTiles.has(t));
-                    availableTiles.push(...posTiles);
-                }
-            }
-            
-            if (availableTiles.length === 0) continue;
-            
-            // Фильтруем тайлы, чтобы не создавать группы больше 2 алингов
-            availableTiles = this.filterTilesToAvoidLargeGroups(availableTiles, alingAssignments);
-            
-            if (availableTiles.length === 0) {
-                // Если после фильтрации не осталось тайлов, используем все доступные
-                availableTiles = [];
-                for (const pos of [1, 2, 3]) {
-                    if (positions[pos]) {
-                        const posTiles = positions[pos].filter(t => !usedTiles.has(t));
-                        availableTiles.push(...posTiles);
-                    }
-                }
-            }
-            
-            // Понижаем вероятность рядом со снайпером игрока
-            if (playerSniper?.tile && availableTiles.length > 1) {
-                const tilesByDistance = availableTiles.map(tile => ({
-                    tile,
-                    distance: Math.abs(tile.gridX - playerSniper.tile.gridX) + 
-                             Math.abs(tile.gridY - playerSniper.tile.gridY)
-                }));
-                
-                // Сортируем: дальние от снайпера в приоритете
-                tilesByDistance.sort((a, b) => b.distance - a.distance);
-                
-                // Берем случайный из дальней половины
-                const halfIndex = Math.ceil(tilesByDistance.length / 2);
-                const preferredTiles = tilesByDistance.slice(0, halfIndex).map(t => t.tile);
-                
-                const selectedTile = this.getRandomFromArray(preferredTiles);
-                alingAssignments.push({ tile: selectedTile, def: alings[i] });
-                usedTiles.add(selectedTile);
-            } else if (availableTiles.length > 0) {
-                const tile = this.getRandomFromArray(availableTiles);
-                alingAssignments.push({ tile, def: alings[i] });
-                usedTiles.add(tile);
-            }
-        }
-        
-        return alingAssignments;
-    }
-
-    filterTilesToAvoidLargeGroups(availableTiles, existingAlings) {
-        if (existingAlings.length === 0) return availableTiles;
-        
-        return availableTiles.filter(tile => {
-            // Считаем, сколько алингов уже находится рядом с этим тайлом
-            let nearbyAlings = 0;
-            
-            for (const aling of existingAlings) {
-                const distance = Math.abs(tile.gridX - aling.tile.gridX) + 
-                               Math.abs(tile.gridY - aling.tile.gridY);
-                if (distance <= 1) { // Рядом считаем на расстоянии 1 тайла
-                    nearbyAlings++;
-                }
-            }
-            
-            // Разрешаем спавн только если рядом меньше 2 алингов
-            return nearbyAlings < 2;
-        });
-    }
-
-    assignBrutePosition(positions, usedTiles, existingAssignments, playerAssignments) {
-        const mageAssignment = existingAssignments.find(a => a?.def?.role === 'support');
-        const playerSniper = playerAssignments?.find(a => a?.def?.role === 'sniper');
-        
-        let availableTiles = [];
-        for (const pos of [1, 2, 3, 4]) {
-            if (positions[pos]) {
-                availableTiles.push(...positions[pos].filter(t => !usedTiles.has(t)));
-            }
-        }
-        
-        if (availableTiles.length === 0) return null;
-        
-        // Понижаем вероятность рядом со снайпером игрока
-        if (playerSniper?.tile && availableTiles.length > 1) {
-            const farFromSniper = availableTiles.filter(tile => {
-                const distance = Math.abs(tile.gridX - playerSniper.tile.gridX) + 
-                               Math.abs(tile.gridY - playerSniper.tile.gridY);
-                return distance > 2;
-            });
-            
-            if (farFromSniper.length > 0) {
-                availableTiles = farFromSniper;
-            }
-        }
-        
-        // Средняя вероятность (50%) появиться рядом с магом
-        if (mageAssignment?.tile && Math.random() < 0.5) {
-            const nearMageTiles = availableTiles.filter(tile => {
-                const distance = Math.abs(tile.gridX - mageAssignment.tile.gridX) + 
-                               Math.abs(tile.gridY - mageAssignment.tile.gridY);
-                return distance <= 2;
-            });
-            
-            if (nearMageTiles.length > 0) {
-                return this.getRandomFromArray(nearMageTiles);
-            }
-        }
-        
-        return this.getRandomFromArray(availableTiles);
-    }
-
     getRandomFromArray(array) {
         return array[Math.floor(Math.random() * array.length)];
     }
@@ -636,7 +854,6 @@ export class UnitManager {
     getRandomTileFromPosition(positionTiles, usedTiles) {
         const available = positionTiles.filter(tile => !usedTiles.has(tile));
         if (available.length === 0) {
-            console.warn('Нет доступных тайлов для позиции');
             return null;
         }
         return this.getRandomFromArray(available);
