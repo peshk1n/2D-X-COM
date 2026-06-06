@@ -17,6 +17,7 @@ export class Tile {
 
         this.unit = null;
         this.sprite = null;
+        this.pickup = null;
     }
 
     setType(type) {
