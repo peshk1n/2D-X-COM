@@ -1,10 +1,5 @@
 export class Pickup {
 
-    /**
-     * @param {Phaser.Scene} scene
-     * @param {import('./Tile.js').Tile} tile   
-     * @param {'medkit'|'attack_boost'} type  
-     */
     constructor(scene, tile, type) {
         this.scene = scene;
         this.tile = tile;
@@ -13,9 +8,6 @@ export class Pickup {
         this.sprite = null;
     }
 
-    /**
-     * @param {import('./Unit.js').Unit} unit
-     */
     applyTo(unit) {
         if (this.consumed) return;
 

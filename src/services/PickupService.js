@@ -3,9 +3,6 @@ import { TILE_TYPES } from '../entities/Tile.js';
 
 export class PickupService {
 
-    /**
-     * @param {Phaser.Scene} scene
-     */
     constructor(scene) {
         this.scene = scene;
         this.pickups = [];
@@ -65,13 +62,12 @@ export class PickupService {
         if (!this.scene.textures.exists('pickup_medkit')) {
             const g = this.scene.add.graphics();
 
-            // Аптечка: белый фон + красный крест
             g.fillStyle(0xffffff);
             g.fillRoundedRect(0, 0, 24, 20, 4);
 
             g.fillStyle(0xef4444);
-            g.fillRect(9, 3, 6, 14);   // вертикаль креста
-            g.fillRect(4, 7, 16, 6);    // горизонталь креста
+            g.fillRect(9, 3, 6, 14);  
+            g.fillRect(4, 7, 16, 6);    
 
             g.generateTexture('pickup_medkit', 24, 20);
             g.destroy();
