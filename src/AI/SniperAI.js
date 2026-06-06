@@ -45,7 +45,14 @@ export class SniperAI {
             }
             
             if (tilesWithLoS.length > 0) {
-                tilesWithLoS.sort((a, b) => b.distanceToPlayer - a.distanceToPlayer);
+                // Сортируем сначала по дистанции до игрока, если дистанция равная, то предпочитаем укрытия
+                tilesWithLoS.sort((a, b) => {
+                    const distDiff = b.distanceToPlayer - a.distanceToPlayer;
+                    if (distDiff !== 0) return distDiff;
+                    const coverA = (a.tile?.coverDefenseBonus ?? 0) + this.scene.blackboard.getHighCoverBonus({ tile: a.tile });
+                    const coverB = (b.tile?.coverDefenseBonus ?? 0) + this.scene.blackboard.getHighCoverBonus({ tile: b.tile });
+                    return coverB - coverA;
+                });
                 const bestTile = tilesWithLoS[0].tile;
                 
                 const plan = { actions: [{type: 'move', tile: bestTile}] };

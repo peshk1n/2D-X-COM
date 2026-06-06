@@ -44,11 +44,16 @@ export class InfoPanel {
         }).setOrigin(0, 0);
         this.container.add(this.actionsText);
 
+        this.coverText = scene.add.text(20, 105, '', {
+            fontSize: '12px', fontFamily: 'Segoe UI', color: '#22d3ee', fontStyle: 'bold'
+        }).setOrigin(0, 0);
+        this.container.add(this.coverText);
 
-        this.hpLabel = scene.add.text(20, 112, 'HP:', { fontSize: '12px', color: '#94a3b8' }).setOrigin(0, 0);
-        this.hpBarBg = scene.add.rectangle(80, 117, 100, 10, 0x334155).setOrigin(0, 0.5);
-        this.hpBar = scene.add.rectangle(80, 117, 100, 10, 0x22c55e).setOrigin(0, 0.5);
-        this.hpText = scene.add.text(130, 117, '', { fontSize: '10px', color: '#ffffff' }).setOrigin(0.5);
+
+        this.hpLabel = scene.add.text(20, 120, 'HP:', { fontSize: '12px', color: '#94a3b8' }).setOrigin(0, 0);
+        this.hpBarBg = scene.add.rectangle(80, 125, 100, 10, 0x334155).setOrigin(0, 0.5);
+        this.hpBar = scene.add.rectangle(80, 125, 100, 10, 0x22c55e).setOrigin(0, 0.5);
+        this.hpText = scene.add.text(130, 125, '', { fontSize: '10px', color: '#ffffff' }).setOrigin(0.5);
         this.container.add([this.hpLabel, this.hpBarBg, this.hpBar, this.hpText]);
 
 
@@ -133,6 +138,25 @@ export class InfoPanel {
         if (hpPercent > 0.6) this.hpBar.setFillStyle(0x22c55e);
         else if (hpPercent > 0.3) this.hpBar.setFillStyle(0xeab308);
         else this.hpBar.setFillStyle(0xef4444);
+
+        const lowBonus = unit?.tile?.coverDefenseBonus ?? 0;
+        const highBonus = this.scene.blackboard.getHighCoverBonus(unit);
+        const highDirs = this.scene.blackboard.getHighCoverDirections(unit);
+
+        const lines = [];
+        if (lowBonus > 0) {
+            lines.push(`🛡️ Низкое укрытие: +${lowBonus}`);
+        }
+        if (highBonus > 0) {
+            const arrows = highDirs.join('');
+            lines.push(`🏛️ Высокое укрытие: +${highBonus} ${arrows}`);
+        }
+
+        if (lines.length > 0) {
+            this.coverText.setText(lines.join('\n')).setVisible(true);
+        } else {
+            this.coverText.setVisible(false);
+        }
 
 
         if (unit.type === 'player' && unit.actionsLeft > 0 && this.scene.phase === 'player') {

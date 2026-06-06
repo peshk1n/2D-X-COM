@@ -881,5 +881,21 @@ export class UnitManager {
         unit.sprite.setVisible(false);
         unit.marker.setVisible(false);
         unit.nameLabel.setVisible(false);
+        if (unit.type === 'enemy') {
+            const points = this._getKillPoints(unit);
+            this.scene.addScore(points);
+        }
+        this.scene.checkWinLose();
+    }
+
+    _getKillPoints(unit) {
+        switch (unit.role) {
+            case 'summoner': return 60;
+            case 'support':  return 50;
+            case 'brute':    return 40;
+            case 'sniper':   return 30;
+            case 'swarm':    return 10;
+            default:         return 15;
+        }
     }
 }

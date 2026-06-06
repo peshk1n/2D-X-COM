@@ -33,6 +33,7 @@ export class MainScene extends Phaser.Scene {
     init() {
         this.isPaused = false;
         this.gameOver = false;
+        this.score = 0;
         this.pauseOverlay = null;
         this.pauseMenuContainer = null;
     }
@@ -81,6 +82,10 @@ export class MainScene extends Phaser.Scene {
         this.supportAI = new SupportEnemyAI(this.unitManager, this.blackboard, this.aiOrchestrator);
 
         this.createUI();
+
+        this.scoreText = this.add.text(1100, 30, 'Очки: 0', {
+            fontSize: '18px', fontFamily: 'Segoe UI', color: '#fbbf24', fontStyle: 'bold'
+        }).setOrigin(0, 1).setDepth(10);
 
         this.fogOfWar = new FogOfWar(this, this.tilemap, { visionRange: 7 });
         this.fogOfWar.render();
@@ -255,11 +260,32 @@ export class MainScene extends Phaser.Scene {
         const alivePlayers = this.unitManager.getPlayerUnits(true).length;
         if (aliveEnemies === 0) {
             this.gameOver = true;
+            this.score += alivePlayers * 25;
+            this.scoreText.setText(`Очки: ${this.score}`);
             this.showGameResult(true);
         } else if (alivePlayers === 0) {
             this.gameOver = true;
             this.showGameResult(false);
         }
+    }
+
+    addScore(points) {
+        this.score += points;
+        this.scoreText.setText(`Очки: ${this.score}`);
+        this.tweens.add({
+            targets: this.scoreText,
+            scale: { from: 1.4, to: 1 },
+            duration: 250,
+            ease: 'Back.easeOut'
+        });
+    }
+
+    getRating(score) {
+        if (score >= 200) return { letter: 'S', color: '#ffd700' };
+        if (score >= 150) return { letter: 'A', color: '#22d3ee' };
+        if (score >= 100) return { letter: 'B', color: '#22c55e' };
+        if (score >= 50)  return { letter: 'C', color: '#eab308' };
+        return            { letter: 'D', color: '#ef4444' };
     }
 
     showGameResult(isVictory) {
@@ -273,8 +299,8 @@ export class MainScene extends Phaser.Scene {
         const titleColor = isVictory ? '#22d3ee' : '#ef4444';
         const titleStroke = isVictory ? '#0e7490' : '#991b1b';
 
-        this.add.text(640, 270, titleText, {
-            fontSize: '80px',
+        this.add.text(640, 220, titleText, {
+            fontSize: '72px',
             fontFamily: 'Arial Black',
             color: titleColor,
             stroke: titleStroke,
@@ -282,13 +308,31 @@ export class MainScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(depth + 1);
 
         const subText = isVictory ? 'Все враги уничтожены' : 'Все союзники погибли';
-        this.add.text(640, 370, subText, {
-            fontSize: '30px',
+        this.add.text(640, 310, subText, {
+            fontSize: '28px',
             fontFamily: 'Arial',
             color: '#cccccc'
         }).setOrigin(0.5).setDepth(depth + 1);
 
-        const menuBtn = this.add.text(640, 460, 'Главное меню', {
+        const finalScore = isVictory ? this.score : Math.floor(this.score * 0.5);
+        const rating = this.getRating(finalScore);
+
+        this.add.text(640, 370, `Очки: ${finalScore}`, {
+            fontSize: '36px',
+            fontFamily: 'Arial',
+            color: '#fbbf24',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(depth + 1);
+
+        this.add.text(640, 420, `Рейтинг: ${rating.letter}`, {
+            fontSize: '52px',
+            fontFamily: 'Arial Black',
+            color: rating.color,
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(depth + 1);
+
+        const menuBtn = this.add.text(640, 500, 'Главное меню', {
             fontSize: '32px',
             color: '#ffffff',
             backgroundColor: '#4a4a6a',
