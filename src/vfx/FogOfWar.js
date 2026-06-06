@@ -95,10 +95,9 @@ export class FogOfWar {
     }
 
     _isTileOpaque(tile) {
-        return (
-            tile.type === TILE_TYPES.WALL ||
-            tile.type === TILE_TYPES.COVER_HIGH
-        );
+        // Только стены блокируют обзор
+        // За высокими укрытиями цель видна, но получает бонус к защите
+        return tile.type === TILE_TYPES.WALL;
     }
 
         computeVisibleTiles(playerUnits) {

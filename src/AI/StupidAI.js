@@ -28,7 +28,15 @@ export class StupidAI {
             return null;
         }
 
-        const bestTile = this.scene.blackboard.getClosestTile(neighbours, enemy.tile).tile;
+        neighbours.sort((a, b) => {
+            const distA = this.scene.blackboard.distanceBetweenTiles(enemy.tile, a);
+            const distB = this.scene.blackboard.distanceBetweenTiles(enemy.tile, b);
+            if (distA !== distB) return distA - distB;
+            const coverA = (a?.coverDefenseBonus ?? 0) + this.scene.blackboard.getHighCoverBonus({ tile: a });
+            const coverB = (b?.coverDefenseBonus ?? 0) + this.scene.blackboard.getHighCoverBonus({ tile: b });
+            return coverB - coverA;
+        });
+        const bestTile = neighbours[0];
 
         const path = pathfinder.findPath(enemy.tile, bestTile, enemy.moveRange);
         if (path && path.length > 0) {

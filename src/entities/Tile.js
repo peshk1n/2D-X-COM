@@ -33,4 +33,9 @@ export class Tile {
 
         this.moveCost = type === TILE_TYPES.RUBBLE ? 2 : 1;
     }
+
+    get coverDefenseBonus() {
+        if (this.type === TILE_TYPES.COVER_LOW) return 3;
+        return 0;
+    }
 }
