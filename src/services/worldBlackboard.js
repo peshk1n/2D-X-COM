@@ -123,6 +123,52 @@ export class WorldBlackboard {
         return bestTile;
     }
 
+    getHighCoverBonus(unit, attackerTile = null) {
+        if (!unit?.tile) return 0;
+
+        const dt = unit.tile;
+        const neighbors = this.scene.pathfinder._getNeighbors(dt);
+        for (const neighbor of neighbors) {
+            if (neighbor.type !== 'cover_high') continue;
+            if (neighbor.unit) continue;
+
+            if (attackerTile) {
+                // Вектор от защитника к укрытию
+                const toCoverX = neighbor.gridX - dt.gridX;
+                const toCoverY = neighbor.gridY - dt.gridY;
+                // Вектор от защитника к атакующему
+                const toAttackerX = attackerTile.gridX - dt.gridX;
+                const toAttackerY = attackerTile.gridY - dt.gridY;
+                // Скалярное произведение > 0, значит укрытие смотрит в сторону врага
+                const dot = toAttackerX * toCoverX + toAttackerY * toCoverY;
+                if (dot <= 0) continue;
+            }
+
+            return 10;
+        }
+        return 0;
+    }
+
+    getHighCoverDirections(unit) {
+        if (!unit?.tile) return [];
+
+        const dt = unit.tile;
+        const neighbors = this.scene.pathfinder._getNeighbors(dt);
+        const dirs = [];
+        for (const neighbor of neighbors) {
+            if (neighbor.type !== 'cover_high') continue;
+            if (neighbor.unit) continue;
+
+            const dx = neighbor.gridX - dt.gridX;
+            const dy = neighbor.gridY - dt.gridY;
+            if (dx === 1)      dirs.push('→');
+            else if (dx === -1) dirs.push('←');
+            else if (dy === 1)  dirs.push('↓');
+            else if (dy === -1) dirs.push('↑');
+        }
+        return dirs;
+    }
+
     getClosestUnitForTile(units, tile) {
         let best = null;
         let distanceLimit = Infinity;

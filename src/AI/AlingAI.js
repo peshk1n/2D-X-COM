@@ -246,6 +246,10 @@ export class AlingAI {
                 score += distFromPrevious * 3;
             }
 
+            const lowCoverBonus = finalTile?.coverDefenseBonus ?? 0;
+            const highCoverBonus = blackboard.getHighCoverBonus({ tile: finalTile });
+            score += (lowCoverBonus + highCoverBonus) * 5;
+
             //React to attack
             for (const ally of swarmUnits) {
 

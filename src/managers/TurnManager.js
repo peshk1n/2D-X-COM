@@ -80,6 +80,8 @@ export class TurnManager {
     }
 
     enemyAct(enemy) {
+        if (this.scene.gameOver) return;
+
         this.scene.aiOrchestrator.processAIActions(enemy, () => {
             // Повторный ход
             if (enemy.consumeExtraTurn()) {
