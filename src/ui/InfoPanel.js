@@ -150,16 +150,21 @@ export class InfoPanel {
         this.actionBtn2.setVisible(true);
         this.skipBtn.setVisible(true);
 
-        let skillText = 'Навык';
-        switch (unit.role) {
-            case 'medic': skillText = 'Лечение'; break;
-            case 'sniper': skillText = 'Точный выстрел'; break;
-            case 'assault': skillText = 'Удар вблизи'; break;
+        if (unit.pickedUpGrenade) {
+            this.actionBtn2.setText('💣 Бросить');
+            this.actionBtn2.off('pointerdown').on('pointerdown', () => this.scene.startAction('grenade'));
+        } else {
+            let skillText = 'Навык';
+            switch (unit.role) {
+                case 'medic': skillText = 'Лечение'; break;
+                case 'sniper': skillText = 'Точный выстрел'; break;
+                case 'assault': skillText = 'Удар вблизи'; break;
+            }
+            this.actionBtn2.setText(skillText);
+            this.actionBtn2.off('pointerdown').on('pointerdown', () => this.scene.startAction('skill'));
         }
-        this.actionBtn2.setText(skillText);
 
         this.actionBtn1.off('pointerdown').on('pointerdown', () => this.scene.startAction('shoot'));
-        this.actionBtn2.off('pointerdown').on('pointerdown', () => this.scene.startAction('skill'));
         this.skipBtn.off('pointerdown').on('pointerdown', () => this.scene.skipUnitTurn());
     }
 

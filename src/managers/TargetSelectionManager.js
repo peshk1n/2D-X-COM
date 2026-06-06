@@ -6,6 +6,12 @@ export class TargetSelectionManager {
     startAction(action) {
         const unit = this.scene.selectedUnit;
         if (!unit || this.scene.phase !== 'player') return;
+
+        if (action === 'grenade') {
+            this.startGrenadeThrowMode();
+            return;
+        }
+
         this.scene.actionMode = action;
         this.scene.movementManager.clearHighlights();
         this.setUnitsInteractive(false);
@@ -121,5 +127,75 @@ export class TargetSelectionManager {
 
     gridDistance(a, b) {
         return Math.abs(a.gridX - b.gridX) + Math.abs(a.gridY - b.gridY);
+    }
+
+
+    startGrenadeThrowMode() {
+        const unit = this.scene.selectedUnit;
+        if (!unit || !unit.pickedUpGrenade || this.scene.phase !== 'player') return;
+
+        this.scene.actionMode = 'grenade';
+        this.scene.movementManager.clearHighlights();
+        this.setUnitsInteractive(false);
+        this.clearActionRange();
+
+        const range = 3;
+        const tilemap = this.scene.tilemap;
+
+        for (let row = 0; row < tilemap.ROWS; row++) {
+            for (let col = 0; col < tilemap.COLS; col++) {
+                const tile = tilemap.getTile(col, row);
+                if (!tile || !tile.walkable) continue;
+                const dist = Math.abs(tile.gridX - unit.tile.gridX)
+                           + Math.abs(tile.gridY - unit.tile.gridY);
+                if (dist < 1 || dist > range) continue;
+
+                const { x, y } = tilemap.gridToWorld(tile.gridX, tile.gridY);
+                const rect = this.scene.add.rectangle(x, y, 36, 36, 0xff8800, 0.3).setDepth(1);
+                rect.setInteractive();
+                rect.on('pointerdown', () => this._executeGrenadeThrow(unit, tile));
+                rect.on('pointerover', () => this._showGrenadePreview(tile));
+                rect.on('pointerout', () => this._clearGrenadePreview());
+                this.scene.rangeHighlights.push(rect);
+            }
+        }
+
+        this.scene.uiManager.updateHelpText();
+    }
+
+    _showGrenadePreview(centerTile) {
+        this._clearGrenadePreview();
+        this._grenadePreviewTiles = [];
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const tile = this.scene.tilemap.getTile(
+                    centerTile.gridX + dx,
+                    centerTile.gridY + dy
+                );
+                if (!tile) continue;
+                const { x, y } = this.scene.tilemap.gridToWorld(tile.gridX, tile.gridY);
+                const marker = this.scene.add.rectangle(x, y, 36, 36, 0xffff00, 0.35).setDepth(3);
+                this._grenadePreviewTiles.push(marker);
+            }
+        }
+    }
+
+    _clearGrenadePreview() {
+        if (this._grenadePreviewTiles) {
+            this._grenadePreviewTiles.forEach(m => m.destroy());
+            this._grenadePreviewTiles = [];
+        }
+    }
+
+    _executeGrenadeThrow(unit, targetTile) {
+        this.clearTargetHighlights();
+        this.clearActionRange();
+        this._clearGrenadePreview();
+        this.setUnitsInteractive(true);
+        this.scene.actionMode = null;
+
+        unit.endTurn();
+        this.scene.combatManager.performGrenadeAttack(unit, targetTile);
+        this.scene.turnManager.endUnitTurn(unit);
     }
 }

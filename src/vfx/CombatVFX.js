@@ -50,6 +50,18 @@ export class CombatVFX {
             g.generateTexture('heal_vfx', 32, 32);
             g.destroy();
         }
+
+        if (!this.scene.textures.exists('grenade_explosion')) {
+            const g = this.scene.add.graphics();
+            g.fillStyle(0xff6600, 0.9);
+            g.fillCircle(32, 32, 30);
+            g.fillStyle(0xffcc00, 0.7);
+            g.fillCircle(32, 32, 18);
+            g.fillStyle(0xffffff, 0.5);
+            g.fillCircle(32, 32, 8);
+            g.generateTexture('grenade_explosion', 64, 64);
+            g.destroy();
+        }
     }
 
     createMuzzleFlash(unit) {
@@ -259,5 +271,32 @@ export class CombatVFX {
                 unit.sprite.x = originalX;
             }
         });
+    }
+
+    playExplosion(x, y) {
+        const boom = this.scene.add.sprite(x, y, 'grenade_explosion').setDepth(50).setScale(0.3);
+        this.scene.tweens.add({
+            targets: boom,
+            scale: 2.0,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power2',
+            onComplete: () => boom.destroy()
+        });
+
+        for (let i = 0; i < 6; i++) {
+            const px = x + Phaser.Math.Between(-20, 20);
+            const py = y + Phaser.Math.Between(-20, 20);
+            const particle = this.scene.add.circle(px, py, 4, 0xff8800).setDepth(51);
+            this.scene.tweens.add({
+                targets: particle,
+                x: px + Phaser.Math.Between(-30, 30),
+                y: py + Phaser.Math.Between(-30, 30),
+                alpha: 0,
+                scale: 0.2,
+                duration: 350,
+                onComplete: () => particle.destroy()
+            });
+        }
     }
 }

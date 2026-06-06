@@ -70,4 +70,47 @@ export class CombatManager {
             onComplete: () => txt.destroy()
         });
     }
+
+    performGrenadeAttack(attacker, centerTile) {
+        if (!attacker.pickedUpGrenade) return;
+
+        attacker.pickedUpGrenade = false;
+
+        const { x, y } = this.scene.tilemap.gridToWorld(centerTile.gridX, centerTile.gridY);
+        this.scene.combatVFX.playExplosion(x, y);
+        this.scene.cameras.main.shake(250, 0.015);
+
+        const affectedTiles = [];
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const tile = this.scene.tilemap.getTile(
+                    centerTile.gridX + dx,
+                    centerTile.gridY + dy
+                );
+                if (tile) affectedTiles.push(tile);
+            }
+        }
+
+        const GRENADE_DAMAGE = 20;
+        affectedTiles.forEach(tile => {
+            if (tile.unit && tile.unit.isAlive && tile.unit !== attacker) {
+                tile.unit.hp -= GRENADE_DAMAGE;
+                tile.unit.lastAttacker = attacker;
+                this.showFloatingText(tile.unit, `-${GRENADE_DAMAGE}`, '#ff8800');
+                if (tile.unit.hp <= 0) {
+                    this.unitManager.killUnit(tile.unit);
+                }
+            }
+        });
+
+        affectedTiles.forEach(tile => {
+            if (tile.type === 'cover_low') {
+                tile.setType('floor');
+                if (tile.sprite) tile.sprite.setFrame(0);
+            } else if (tile.type === 'cover_high') {
+                tile.setType('rubble');
+                if (tile.sprite) tile.sprite.setFrame(4);
+            }
+        });
+    }
 }

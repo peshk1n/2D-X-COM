@@ -17,6 +17,7 @@ import { CombatVFX } from '../vfx/CombatVFX.js';
 import { AIOrchestrator } from '../AI/AIOrchestrator.js';
 import { AudioManager } from '../managers/AudioManager.js';
 import { TILE_TYPES } from '../entities/Tile.js';
+import { PickupService } from '../services/PickupService.js';
 
 export class MainScene extends Phaser.Scene {
     constructor() {
@@ -73,6 +74,9 @@ export class MainScene extends Phaser.Scene {
         this.aiOrchestrator = new AIOrchestrator(this);
 
         this.unitManager.createUnits(this.tilemap);
+
+        this.pickupService = new PickupService(this);
+        this.pickupService.spawnPickups();
 
         this.supportAI = new SupportEnemyAI(this.unitManager, this.blackboard, this.aiOrchestrator);
 
